@@ -16,3 +16,4 @@ konst = "0.3.0"
 prebindgen = { path = "/Users/milyin/prebindgen/prebindgen" }
 zenoh-flat = { path = "../zenoh-flat" }
 cbindgen = "0.29.0"
+syn = { version = "2.0", features = ["full"] }

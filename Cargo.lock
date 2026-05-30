@@ -2995,6 +2995,7 @@ dependencies = [
  "cbindgen",
  "konst 0.3.17",
  "prebindgen",
+ "syn 2.0.117",
  "zenoh-flat",
 ]
 

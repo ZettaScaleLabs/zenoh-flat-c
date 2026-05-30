@@ -19,8 +19,12 @@ fn generate_flat_bindings() -> PathBuf {
     // Reader over the data emitted by zenoh-flat's `#[prebindgen]` macro.
     let source = prebindgen::Source::new(zenoh_flat::PREBINDGEN_OUT_DIR);
 
-    // C / cbindgen adapter. No declarations yet -> empty library (scaffolding).
-    let cbindgen = prebindgen::lang::Cbindgen::new();
+    // C / cbindgen adapter. First declared function: `z_keyexpr_try_from`.
+    let cbindgen = prebindgen::lang::Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
+        .data_struct_named(syn::parse_quote!(Error), "z_error")
+        .function(syn::parse_quote!(z_keyexpr_try_from));
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
