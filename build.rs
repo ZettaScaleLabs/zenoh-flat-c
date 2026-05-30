@@ -25,7 +25,10 @@ fn generate_flat_bindings() -> PathBuf {
         .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
         .data_struct_named(syn::parse_quote!(Error), "z_error")
         .error()
-        .function(syn::parse_quote!(z_keyexpr_try_from));
+        .enum_(syn::parse_quote!(SetIntersectionLevel))
+        .function(syn::parse_quote!(z_keyexpr_try_from))
+        .function(syn::parse_quote!(z_keyexpr_relation_to))
+        .panic();
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
