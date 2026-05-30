@@ -24,6 +24,7 @@ fn generate_flat_bindings() -> PathBuf {
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
         .data_struct_named(syn::parse_quote!(Error), "z_error")
+        .error()
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
     let mut registry =
