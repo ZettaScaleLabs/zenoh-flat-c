@@ -19,7 +19,21 @@ fn generate_flat_bindings() -> PathBuf {
     // Reader over the data emitted by zenoh-flat's `#[prebindgen]` macro.
     let source = prebindgen::Source::new(zenoh_flat::PREBINDGEN_OUT_DIR);
 
-    // C / cbindgen adapter. First declared function: `z_keyexpr_try_from`.
+    // C / cbindgen adapter.
+    //
+    // We wrap only the `z_keyexpr_*` family — the low-level functions that
+    // operate directly on the native `ZKeyExpr` handle and already have plain,
+    // FFI-able signatures (`&ZKeyExpr`, `String`, `bool`, `Result<ZKeyExpr,
+    // Error>`, `SetIntersectionLevel`). For C this is the right granularity: a
+    // C caller holds the opaque `z_keyexpr_t` and crossing the boundary is cheap.
+    //
+    // We deliberately do NOT wrap the high-level `KeyExpr` struct or its
+    // `keyexpr_*` functions. Those use `impl Into<KeyExpr>` generics (not
+    // `extern "C"`-able) and a string-caching struct designed for managed
+    // languages like Java/Kotlin, where every native-boundary crossing is
+    // expensive: there the key expression is held string-side and the native
+    // `ZKeyExpr` is materialized lazily. That layer belongs to the JNI adapter,
+    // not the C one.
     let cbindgen = prebindgen::lang::Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .ptr_struct(syn::parse_quote!(ZKeyExpr))
@@ -29,9 +43,20 @@ fn generate_flat_bindings() -> PathBuf {
         .name("z_error_t")
         .error()
         .enum_type(syn::parse_quote!(SetIntersectionLevel)).name("z_set_intersection_level_t")
+        // Fallible constructors: `Result<ZKeyExpr, Error>`.
         .function(syn::parse_quote!(z_keyexpr_try_from))
-        .function(syn::parse_quote!(z_keyexpr_relation_to))
-        .panic();
+        .function(syn::parse_quote!(z_keyexpr_autocanonize))
+        // Predicates over borrowed handles returning `bool`. They have fallible
+        // (null-checked) borrow inputs but no `Result` channel, so `.panic()`
+        // lets the wrapper abort on a null handle.
+        .function(syn::parse_quote!(z_keyexpr_intersects)).panic()
+        .function(syn::parse_quote!(z_keyexpr_includes)).panic()
+        // Borrowed-handle relation returning the `SetIntersectionLevel` enum —
+        // also `.panic()` (fallible borrows, no `Result`).
+        .function(syn::parse_quote!(z_keyexpr_relation_to)).panic()
+        // Builders combining a borrowed handle with a `String` → `Result`.
+        .function(syn::parse_quote!(z_keyexpr_join))
+        .function(syn::parse_quote!(z_keyexpr_concat));
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
