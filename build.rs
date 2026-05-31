@@ -168,6 +168,10 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(session_delete),
         pq!(session_get),
         pq!(session_put),
+        // Value-class zid accessors (return the `ZenohId` data twin) — JNI layer.
+        pq!(session_zid),
+        pq!(session_peers_zid),
+        pq!(session_routers_zid),
         pq!(z_query_expand),
         pq!(z_reply_expand),
         pq!(z_sample_expand),
@@ -325,13 +329,19 @@ fn generate_flat_bindings() -> PathBuf {
     // have no `Result` channel, so `.panic()`. (`z_zbytes_from_slice`, a `&[u8]`
     // slice input, is infallible and declared in the plain `.function` loop.)
     for function in [
-        pq!(z_hello_locators),    // Vec<String>
-        pq!(z_zbytes_to_bytes),   // Vec<u8>
-        pq!(z_zenoh_id_to_bytes), // Vec<u8>
-        pq!(z_timestamp_id),      // Vec<u8>
+        pq!(z_hello_locators),       // Vec<String>
+        pq!(z_zbytes_to_bytes),      // Vec<u8>
+        pq!(z_zenoh_id_to_bytes),    // Vec<u8>
+        pq!(z_timestamp_id),         // Vec<u8>
+        pq!(z_session_peers_zid),    // Vec<ZZenohId>
+        pq!(z_session_routers_zid),  // Vec<ZZenohId>
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
+
+    // Opaque-handle zid accessor: returns the `ZZenohId` handle (`&ZSession`
+    // borrow is fallible, no `Result`, so `.panic()`).
+    cbindgen = cbindgen.function(pq!(z_session_zid)).panic();
 
     // Logger helpers. Keep the public C ABI on the existing `z_*` prefix.
     cbindgen = cbindgen
