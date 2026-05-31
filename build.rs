@@ -169,6 +169,7 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(session_get),
         pq!(session_put),
         pq!(zenoh_id_to_string),
+        pq!(z_zbytes_from_vec),
     ] {
         cbindgen = cbindgen.ignore_function(function);
     }
@@ -193,13 +194,21 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_session_undeclare_keyexpr),
         // Explicit, callback-free operations taking concrete handles
         // (`&z_keyexpr_t`, `z_zbytes_t`, `&z_encoding_t`) — no `impl Into<…>`.
-        // `Option<T>` and `Vec<T>`/slice functions are declared separately below
-        // (they need `.panic()`); the remaining explicit functions (put/delete/
-        // reply_success/reply_delete) stay undeclared for now.
+        // All return `Result<(), Error>`, so fallible inputs (including the
+        // `Option<…>` attachments) route through the error out-param — no
+        // `.panic()`. Only the callback APIs and the value-struct/`Vec<ZenohId>`
+        // returns remain undeclared.
         pq!(z_zbytes_from_slice),
         pq!(z_session_declare_publisher),
         pq!(z_session_declare_querier),
         pq!(z_query_reply_error),
+        // Put/delete/reply ops, unblocked by `Option<T>` input support.
+        pq!(z_publisher_put),
+        pq!(z_publisher_delete),
+        pq!(z_session_put),
+        pq!(z_session_delete),
+        pq!(z_query_reply_success),
+        pq!(z_query_reply_delete),
         pq!(z_liveliness_declare_token),
         pq!(z_encoding_zenoh_bytes),
         pq!(z_encoding_zenoh_string),
