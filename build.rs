@@ -193,10 +193,10 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_session_undeclare_keyexpr),
         // Explicit, callback-free operations taking concrete handles
         // (`&z_keyexpr_t`, `z_zbytes_t`, `&z_encoding_t`) — no `impl Into<…>`.
-        // `Option<T>` getters are declared separately below (they need
-        // `.panic()`); the remaining explicit functions (put/delete/
-        // reply_success/reply_delete + the z_zbytes byte builders) are still
-        // blocked on adapter support for `Vec<u8>` and stay undeclared for now.
+        // `Option<T>` and `Vec<T>`/slice functions are declared separately below
+        // (they need `.panic()`); the remaining explicit functions (put/delete/
+        // reply_success/reply_delete) stay undeclared for now.
+        pq!(z_zbytes_from_bytes),
         pq!(z_session_declare_publisher),
         pq!(z_session_declare_querier),
         pq!(z_query_reply_error),
@@ -303,6 +303,19 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_reply_sample),         // Option<ZSample>
         pq!(z_reply_error_payload),  // Option<ZZBytes>
         pq!(z_reply_error_encoding), // Option<ZEncoding>
+    ] {
+        cbindgen = cbindgen.function(function).panic();
+    }
+
+    // `Vec<T>` getters: lower to a malloc'd array (`T* + size_t`) freed C-side
+    // via the `z_free_array` macro. Their null-checked `&handle` borrow inputs
+    // have no `Result` channel, so `.panic()`. (`z_zbytes_from_bytes`, a `&[u8]`
+    // slice input, is infallible and declared in the plain `.function` loop.)
+    for function in [
+        pq!(z_hello_locators),    // Vec<String>
+        pq!(z_zbytes_to_bytes),   // Vec<u8>
+        pq!(z_zenoh_id_to_bytes), // Vec<u8>
+        pq!(z_timestamp_id),      // Vec<u8>
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
