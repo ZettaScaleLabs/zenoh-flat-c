@@ -8,6 +8,7 @@
 //! is empty and the produced library exports no symbols yet.
 
 use std::path::PathBuf;
+use syn::parse_quote as pq;
 
 fn main() {
     let bindings_file = generate_flat_bindings();
@@ -35,28 +36,28 @@ fn generate_flat_bindings() -> PathBuf {
     // `ZKeyExpr` is materialized lazily. That layer belongs to the JNI adapter,
     // not the C one.
     let cbindgen = prebindgen::lang::Cbindgen::new()
-        .source_module(syn::parse_quote!(zenoh_flat))
-        .ptr_struct(syn::parse_quote!(ZKeyExpr))
+        .source_module(pq!(zenoh_flat))
+        .ptr_struct(pq!(ZKeyExpr))
         .name("z_keyexpr_t")
         .destructor_name("z_keyexpr_drop")
-        .data_struct(syn::parse_quote!(Error))
+        .data_struct(pq!(Error))
         .name("z_error_t")
         .error()
-        .enum_type(syn::parse_quote!(SetIntersectionLevel)).name("z_set_intersection_level_t")
+        .enum_type(pq!(SetIntersectionLevel)).name("z_set_intersection_level_t")
         // Fallible constructors: `Result<ZKeyExpr, Error>`.
-        .function(syn::parse_quote!(z_keyexpr_try_from))
-        .function(syn::parse_quote!(z_keyexpr_autocanonize))
+        .function(pq!(z_keyexpr_try_from))
+        .function(pq!(z_keyexpr_autocanonize))
         // Predicates over borrowed handles returning `bool`. They have fallible
         // (null-checked) borrow inputs but no `Result` channel, so `.panic()`
         // lets the wrapper abort on a null handle.
-        .function(syn::parse_quote!(z_keyexpr_intersects)).panic()
-        .function(syn::parse_quote!(z_keyexpr_includes)).panic()
+        .function(pq!(z_keyexpr_intersects)).panic()
+        .function(pq!(z_keyexpr_includes)).panic()
         // Borrowed-handle relation returning the `SetIntersectionLevel` enum —
         // also `.panic()` (fallible borrows, no `Result`).
-        .function(syn::parse_quote!(z_keyexpr_relation_to)).panic()
+        .function(pq!(z_keyexpr_relation_to)).panic()
         // Builders combining a borrowed handle with a `String` → `Result`.
-        .function(syn::parse_quote!(z_keyexpr_join))
-        .function(syn::parse_quote!(z_keyexpr_concat));
+        .function(pq!(z_keyexpr_join))
+        .function(pq!(z_keyexpr_concat));
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
