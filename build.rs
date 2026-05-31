@@ -22,10 +22,13 @@ fn generate_flat_bindings() -> PathBuf {
     // C / cbindgen adapter. First declared function: `z_keyexpr_try_from`.
     let cbindgen = prebindgen::lang::Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
-        .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
-        .data_struct_named(syn::parse_quote!(Error), "z_error")
+        .ptr_struct(syn::parse_quote!(ZKeyExpr))
+        .name("z_keyexpr_t")
+        .destructor_name("z_keyexpr_drop")
+        .data_struct(syn::parse_quote!(Error))
+        .name("z_error_t")
         .error()
-        .enum_(syn::parse_quote!(SetIntersectionLevel))
+        .enum_type(syn::parse_quote!(SetIntersectionLevel)).name("z_set_intersection_level_t")
         .function(syn::parse_quote!(z_keyexpr_try_from))
         .function(syn::parse_quote!(z_keyexpr_relation_to))
         .panic();
