@@ -270,6 +270,8 @@ fn generate_flat_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(z_keyexpr_relation_to)).panic();
 
     for function in [
+        pq!(z_keyexpr_clone),
+        pq!(z_config_clone),
         pq!(z_zenoh_id_to_string),
         pq!(z_hello_whatami),
         pq!(z_hello_zid),
