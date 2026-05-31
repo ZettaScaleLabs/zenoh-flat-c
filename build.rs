@@ -50,6 +50,10 @@ fn generate_flat_bindings() -> PathBuf {
         (pq!(ZReply), "z_reply_t", "z_reply_drop"),
         (pq!(ZSample), "z_sample_t", "z_sample_drop"),
         (pq!(ZTimestamp), "z_timestamp_t", "z_timestamp_drop"),
+        (pq!(ZPublisher), "z_publisher_t", "z_publisher_drop"),
+        (pq!(ZQuerier), "z_querier_t", "z_querier_drop"),
+        (pq!(ZQuery), "z_query_t", "z_query_drop"),
+        (pq!(ZLivelinessToken), "z_liveliness_token_t", "z_liveliness_token_drop"),
     ] {
         cbindgen = cbindgen.ptr_struct(ty).name(name).destructor_name(drop_name);
     }
@@ -148,12 +152,22 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(keyexpr_relation_to),
         pq!(keyexpr_try_from),
         pq!(liveliness_declare_subscriber),
+        pq!(liveliness_declare_token),
         pq!(liveliness_get),
+        pq!(publisher_delete),
+        pq!(publisher_put),
         pq!(querier_get),
+        pq!(query_reply_delete),
+        pq!(query_reply_error),
+        pq!(query_reply_success),
         pq!(scout),
+        pq!(session_declare_publisher),
+        pq!(session_declare_querier),
         pq!(session_declare_queryable),
         pq!(session_declare_subscriber),
+        pq!(session_delete),
         pq!(session_get),
+        pq!(session_put),
         pq!(zenoh_id_to_string),
     ] {
         cbindgen = cbindgen.ignore_function(function);
@@ -177,6 +191,17 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_open),
         pq!(z_session_declare_keyexpr),
         pq!(z_session_undeclare_keyexpr),
+        // Explicit, callback-free operations whose concrete signatures need
+        // neither `Option<T>` nor `Vec<u8>` on the wire (the two type classes
+        // `lang::Cbindgen` does not yet marshal). All take concrete handles
+        // (`&z_keyexpr_t`, `z_zbytes_t`, `&z_encoding_t`) — no `impl Into<…>`.
+        // The remaining explicit functions (put/delete/reply_success/
+        // reply_delete + the z_zbytes byte builders) are blocked on adapter
+        // support for `Option<T>` and `Vec<u8>` and stay undeclared for now.
+        pq!(z_session_declare_publisher),
+        pq!(z_session_declare_querier),
+        pq!(z_query_reply_error),
+        pq!(z_liveliness_declare_token),
         pq!(z_encoding_zenoh_bytes),
         pq!(z_encoding_zenoh_string),
         pq!(z_encoding_zenoh_serialized),
