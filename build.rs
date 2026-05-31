@@ -191,13 +191,12 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_open),
         pq!(z_session_declare_keyexpr),
         pq!(z_session_undeclare_keyexpr),
-        // Explicit, callback-free operations whose concrete signatures need
-        // neither `Option<T>` nor `Vec<u8>` on the wire (the two type classes
-        // `lang::Cbindgen` does not yet marshal). All take concrete handles
+        // Explicit, callback-free operations taking concrete handles
         // (`&z_keyexpr_t`, `z_zbytes_t`, `&z_encoding_t`) — no `impl Into<…>`.
-        // The remaining explicit functions (put/delete/reply_success/
-        // reply_delete + the z_zbytes byte builders) are blocked on adapter
-        // support for `Option<T>` and `Vec<u8>` and stay undeclared for now.
+        // `Option<T>` getters are declared separately below (they need
+        // `.panic()`); the remaining explicit functions (put/delete/
+        // reply_success/reply_delete + the z_zbytes byte builders) are still
+        // blocked on adapter support for `Vec<u8>` and stay undeclared for now.
         pq!(z_session_declare_publisher),
         pq!(z_session_declare_querier),
         pq!(z_query_reply_error),
@@ -288,6 +287,22 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_sample_express),
         pq!(z_sample_priority),
         pq!(z_sample_congestion_control),
+    ] {
+        cbindgen = cbindgen.function(function).panic();
+    }
+
+    // `Option<T>` getters: NULL encodes `None` on the wire, so NULL can no
+    // longer double as an error channel — their null-checked borrow inputs
+    // need `.panic()`. All inner `T` lower to a pointer wire (`String` →
+    // `char*`, the rest to declared opaque handles).
+    for function in [
+        pq!(z_encoding_schema),      // Option<String>
+        pq!(z_sample_timestamp),     // Option<ZTimestamp>
+        pq!(z_sample_attachment),    // Option<ZZBytes>
+        pq!(z_reply_replier_zid),    // Option<ZZenohId>
+        pq!(z_reply_sample),         // Option<ZSample>
+        pq!(z_reply_error_payload),  // Option<ZZBytes>
+        pq!(z_reply_error_encoding), // Option<ZEncoding>
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
