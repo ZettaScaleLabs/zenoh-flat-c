@@ -3,9 +3,6 @@
 //! prebindgen part: read the `#[prebindgen]` items collected by `zenoh-flat`
 //! and run them through the `lang::Cbindgen` adapter to produce a Rust file of
 //! `extern "C"` wrappers. cbindgen part: turn that Rust file into a C header.
-//!
-//! Currently scaffolding: the adapter declares nothing, so the generated file
-//! is empty and the produced library exports no symbols yet.
 
 use std::path::PathBuf;
 use syn::parse_quote as pq;
@@ -22,11 +19,11 @@ fn generate_flat_bindings() -> PathBuf {
 
     // C / cbindgen adapter.
     //
-    // We wrap only the `z_keyexpr_*` family — the low-level functions that
-    // operate directly on the native `ZKeyExpr` handle and already have plain,
-    // FFI-able signatures (`&ZKeyExpr`, `String`, `bool`, `Result<ZKeyExpr,
-    // Error>`, `SetIntersectionLevel`). For C this is the right granularity: a
-    // C caller holds the opaque `z_keyexpr_t` and crossing the boundary is cheap.
+    // We wrap the C-facing low-level APIs that already have clean ownership and
+    // error semantics for a native caller:
+    // - key expressions via the `ZKeyExpr` opaque handle
+    // - configs via the `ZConfig` opaque handle
+    // - logger initialization helpers
     //
     // We deliberately do NOT wrap the high-level `KeyExpr` struct or its
     // `keyexpr_*` functions. Those use `impl Into<KeyExpr>` generics (not
@@ -37,27 +34,56 @@ fn generate_flat_bindings() -> PathBuf {
     // not the C one.
     let cbindgen = prebindgen::lang::Cbindgen::new()
         .source_module(pq!(zenoh_flat))
+        // Single universal raw-memory freer for the `char*` data the layer hands
+        // out (string returns + data-struct `String` fields). Opaque handles keep
+        // their own typed `*_drop`.
+        .free_memory_function("z_free")
         .ptr_struct(pq!(ZKeyExpr))
         .name("z_keyexpr_t")
         .destructor_name("z_keyexpr_drop")
+        .ptr_struct(pq!(ZConfig))
+        .name("z_config_t")
+        .destructor_name("z_config_drop")
         .data_struct(pq!(Error))
         .name("z_error_t")
         .error()
-        .enum_type(pq!(SetIntersectionLevel)).name("z_set_intersection_level_t")
+        .enum_type(pq!(SetIntersectionLevel))
+        .name("z_set_intersection_level_t")
         // Fallible constructors: `Result<ZKeyExpr, Error>`.
         .function(pq!(z_keyexpr_try_from))
         .function(pq!(z_keyexpr_autocanonize))
         // Predicates over borrowed handles returning `bool`. They have fallible
         // (null-checked) borrow inputs but no `Result` channel, so `.panic()`
         // lets the wrapper abort on a null handle.
-        .function(pq!(z_keyexpr_intersects)).panic()
-        .function(pq!(z_keyexpr_includes)).panic()
+        .function(pq!(z_keyexpr_intersects))
+        .panic()
+        .function(pq!(z_keyexpr_includes))
+        .panic()
         // Borrowed-handle relation returning the `SetIntersectionLevel` enum —
         // also `.panic()` (fallible borrows, no `Result`).
-        .function(pq!(z_keyexpr_relation_to)).panic()
+        .function(pq!(z_keyexpr_relation_to))
+        .panic()
         // Builders combining a borrowed handle with a `String` → `Result`.
         .function(pq!(z_keyexpr_join))
-        .function(pq!(z_keyexpr_concat));
+        .function(pq!(z_keyexpr_concat))
+        // Config constructors / parsers.
+        .function(pq!(z_config_default))
+        .function(pq!(z_config_from_file))
+        .function(pq!(z_config_from_json))
+        .function(pq!(z_config_from_json5))
+        .function(pq!(z_config_from_yaml))
+        // Config accessors / mutators.
+        .function(pq!(z_config_get_json))
+        .function(pq!(z_config_insert_json5))
+        // Logger helpers. Keep the public C ABI on the existing `z_*` prefix.
+        .function(pq!(init_android_logs))
+        .name("z_init_android_logs")
+        .panic()
+        .function(pq!(try_init_zenoh_logs_from_env))
+        .name("z_try_init_zenoh_logs_from_env")
+        .function(pq!(init_zenoh_logs_from_env_or))
+        .name("z_init_zenoh_logs_from_env_or")
+        .panic();
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
