@@ -9,7 +9,12 @@ style = "type"
 # with the caller-supplied `elem_drop` (`z_free` for `char*`, `z_<x>_drop` for an
 # opaque handle, a field-freer for a struct), then the malloc'd block via the
 # universal `z_free`. Plain scalar/POD arrays need only `z_free(array)`.
-trailer = '''
+#
+# Placed via `after_includes` (not `trailer`) so it sits INSIDE the include
+# guard — `trailer` is emitted after `#endif`, which would redefine the macro on
+# a second include.
+after_includes = '''
+
 #define z_free_array(array, len, elem_drop) \
     do { \
         if (array) { \
@@ -18,8 +23,7 @@ trailer = '''
             } \
             z_free((void *)(array)); \
         } \
-    } while (0)
-'''
+    } while (0)'''
 
 [export]
 # The generated bindings declare the C allocator (`malloc`/`free`) via an

@@ -196,7 +196,7 @@ fn generate_flat_bindings() -> PathBuf {
         // `Option<T>` and `Vec<T>`/slice functions are declared separately below
         // (they need `.panic()`); the remaining explicit functions (put/delete/
         // reply_success/reply_delete) stay undeclared for now.
-        pq!(z_zbytes_from_bytes),
+        pq!(z_zbytes_from_slice),
         pq!(z_session_declare_publisher),
         pq!(z_session_declare_querier),
         pq!(z_query_reply_error),
@@ -309,7 +309,7 @@ fn generate_flat_bindings() -> PathBuf {
 
     // `Vec<T>` getters: lower to a malloc'd array (`T* + size_t`) freed C-side
     // via the `z_free_array` macro. Their null-checked `&handle` borrow inputs
-    // have no `Result` channel, so `.panic()`. (`z_zbytes_from_bytes`, a `&[u8]`
+    // have no `Result` channel, so `.panic()`. (`z_zbytes_from_slice`, a `&[u8]`
     // slice input, is infallible and declared in the plain `.function` loop.)
     for function in [
         pq!(z_hello_locators),    // Vec<String>
