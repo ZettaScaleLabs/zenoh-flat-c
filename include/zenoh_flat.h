@@ -23,10 +23,21 @@
     } while (0)
 
 typedef enum {
+  Router = 1,
+  Peer = 2,
+  Client = 4,
+} z_flat_whatami_t;
+
+typedef enum {
   Drop = 0,
   Block = 1,
   BlockFirst = 2,
 } z_flat_congestion_control_t;
+
+typedef enum {
+  Put = 0,
+  Delete = 1,
+} z_flat_sample_kind_t;
 
 typedef enum {
   RealTime = 1,
@@ -56,20 +67,13 @@ typedef enum {
   MatchingQuery = 1,
 } z_flat_reply_key_expr_t;
 
-typedef enum {
-  Router = 1,
-  Peer = 2,
-  Client = 4,
-} z_flat_whatami_t;
-
-typedef enum {
-  Put = 0,
-  Delete = 1,
-} z_flat_sample_kind_t;
-
 typedef struct {
   uint8_t _private[0];
 } z_flat_config_t;
+
+typedef struct {
+  char *message;
+} z_flat_error_t;
 
 typedef struct {
   uint8_t _private[0];
@@ -81,7 +85,35 @@ typedef struct {
 
 typedef struct {
   uint8_t _private[0];
+} z_flat_zenoh_id_t;
+
+typedef struct {
+  uint8_t _private[0];
 } z_flat_keyexpr_t;
+
+typedef struct {
+  uint8_t _private[0];
+} z_flat_subscriber_t;
+
+typedef struct {
+  uint8_t _private[0];
+} z_flat_session_t;
+
+typedef struct {
+  uint8_t _private[0];
+} z_flat_sample_t;
+
+typedef struct {
+  void *context;
+  void (*call)(z_flat_sample_t*, void*);
+  void (*drop)(void*);
+} z_flat_closure_sample_t;
+
+typedef struct {
+  void *context;
+  void (*call)(void*);
+  void (*drop)(void*);
+} z_flat_closure_drop_t;
 
 typedef struct {
   uint8_t _private[0];
@@ -89,7 +121,21 @@ typedef struct {
 
 typedef struct {
   uint8_t _private[0];
+} z_flat_reply_t;
+
+typedef struct {
+  void *context;
+  void (*call)(z_flat_reply_t*, void*);
+  void (*drop)(void*);
+} z_flat_closure_reply_t;
+
+typedef struct {
+  uint8_t _private[0];
 } z_flat_publisher_t;
+
+typedef struct {
+  uint8_t _private[0];
+} z_flat_zbytes_t;
 
 typedef struct {
   uint8_t _private[0];
@@ -105,63 +151,11 @@ typedef struct {
 
 typedef struct {
   uint8_t _private[0];
-} z_flat_reply_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_flat_sample_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_flat_scout_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_flat_session_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_flat_subscriber_t;
-
-typedef struct {
-  uint8_t _private[0];
 } z_flat_timestamp_t;
 
 typedef struct {
   uint8_t _private[0];
-} z_flat_zbytes_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_flat_zenoh_id_t;
-
-typedef struct {
-  char *message;
-} z_flat_error_t;
-
-typedef struct {
-  void *context;
-  void (*call)(z_flat_sample_t*, void*);
-  void (*drop)(void*);
-} z_flat_closure_sample_t;
-
-typedef struct {
-  void *context;
-  void (*call)(void*);
-  void (*drop)(void*);
-} z_flat_closure_drop_t;
-
-typedef struct {
-  void *context;
-  void (*call)(z_flat_reply_t*, void*);
-  void (*drop)(void*);
-} z_flat_closure_reply_t;
-
-typedef struct {
-  void *context;
-  void (*call)(z_flat_query_t*, void*);
-  void (*drop)(void*);
-} z_flat_closure_query_t;
+} z_flat_scout_t;
 
 typedef struct {
   void *context;
@@ -169,150 +163,184 @@ typedef struct {
   void (*drop)(void*);
 } z_flat_closure_hello_t;
 
-void z_flat_free(void *p);
+typedef struct {
+  void *context;
+  void (*call)(z_flat_query_t*, void*);
+  void (*drop)(void*);
+} z_flat_closure_query_t;
+
+z_flat_config_t *z_flat_config_clone(const z_flat_config_t *c);
+
+z_flat_config_t *z_flat_config_default(void);
 
 void z_flat_config_drop(z_flat_config_t *this_);
 
-void z_flat_encoding_drop(z_flat_encoding_t *this_);
+z_flat_config_t *z_flat_config_from_file(const char *path, z_flat_error_t *e);
 
-void z_flat_hello_drop(z_flat_hello_t *this_);
+z_flat_config_t *z_flat_config_from_json(const char *s, z_flat_error_t *e);
 
-void z_flat_keyexpr_drop(z_flat_keyexpr_t *this_);
+z_flat_config_t *z_flat_config_from_json5(const char *s, z_flat_error_t *e);
 
-void z_flat_liveliness_token_drop(z_flat_liveliness_token_t *this_);
+z_flat_config_t *z_flat_config_from_yaml(const char *s, z_flat_error_t *e);
 
-void z_flat_publisher_drop(z_flat_publisher_t *this_);
+char *z_flat_config_get_json(const z_flat_config_t *c, const char *key, z_flat_error_t *e);
 
-void z_flat_querier_drop(z_flat_querier_t *this_);
+bool z_flat_config_insert_json5(z_flat_config_t *c,
+                                const char *key,
+                                const char *value,
+                                z_flat_error_t *e);
 
-void z_flat_query_drop(z_flat_query_t *this_);
+const z_flat_encoding_t *z_flat_encoding_application_cbor(void);
 
-void z_flat_queryable_drop(z_flat_queryable_t *this_);
+const z_flat_encoding_t *z_flat_encoding_application_cdr(void);
 
-void z_flat_reply_drop(z_flat_reply_t *this_);
+const z_flat_encoding_t *z_flat_encoding_application_coap_payload(void);
 
-void z_flat_sample_drop(z_flat_sample_t *this_);
-
-void z_flat_scout_drop(z_flat_scout_t *this_);
-
-void z_flat_session_drop(z_flat_session_t *this_);
-
-void z_flat_subscriber_drop(z_flat_subscriber_t *this_);
-
-void z_flat_timestamp_drop(z_flat_timestamp_t *this_);
-
-void z_flat_zbytes_drop(z_flat_zbytes_t *this_);
-
-void z_flat_zenoh_id_drop(z_flat_zenoh_id_t *this_);
-
-const z_flat_zbytes_t *z_flat_query_payload(const z_flat_query_t *q);
-
-const z_flat_encoding_t *z_flat_encoding_video_ogg(void);
-
-z_flat_keyexpr_t *z_flat_keyexpr_join(const z_flat_keyexpr_t *a, const char *b, z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_java_serialized_object(void);
 
 const z_flat_encoding_t *z_flat_encoding_application_json(void);
 
-bool z_flat_query_reply_delete(const z_flat_query_t *query,
-                               const z_flat_keyexpr_t *key_expr,
-                               const int64_t *timestamp_ntp64,
-                               z_flat_zbytes_t *attachment,
-                               bool express,
-                               z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_json_patch_json(void);
 
-bool z_flat_publisher_put(const z_flat_publisher_t *publisher,
-                          z_flat_zbytes_t *payload,
-                          const z_flat_encoding_t *encoding,
-                          z_flat_zbytes_t *attachment,
-                          z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_json_seq(void);
 
-const z_flat_encoding_t *z_flat_encoding_application_yaml(void);
-
-bool z_flat_session_delete(const z_flat_session_t *session,
-                           const z_flat_keyexpr_t *key_expr,
-                           z_flat_congestion_control_t congestion_control,
-                           z_flat_priority_t priority,
-                           bool express,
-                           z_flat_zbytes_t *attachment,
-                           z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_jsonpath(void);
 
 const z_flat_encoding_t *z_flat_encoding_application_jwt(void);
 
+const z_flat_encoding_t *z_flat_encoding_application_mp4(void);
+
+const z_flat_encoding_t *z_flat_encoding_application_octet_stream(void);
+
 const z_flat_encoding_t *z_flat_encoding_application_openmetrics_text(void);
 
-const z_flat_encoding_t *z_flat_encoding_text_json5(void);
+const z_flat_encoding_t *z_flat_encoding_application_protobuf(void);
 
-z_flat_keyexpr_t *z_flat_keyexpr_autocanonize(const char *s, z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_python_serialized_object(void);
 
-const z_flat_encoding_t *z_flat_encoding_text_plain(void);
-
-const z_flat_encoding_t *z_flat_encoding_audio_vorbis(void);
-
-const z_flat_encoding_t *z_flat_encoding_text_json(void);
-
-const z_flat_zbytes_t *z_flat_sample_payload(const z_flat_sample_t *s);
-
-const z_flat_encoding_t *z_flat_encoding_text_yaml(void);
-
-z_flat_zbytes_t *z_flat_zbytes_from_slice(const uint8_t *bytes, uintptr_t bytes_len);
-
-const z_flat_keyexpr_t *z_flat_sample_key_expr(const z_flat_sample_t *s);
-
-const z_flat_encoding_t *z_flat_encoding_application_yang(void);
-
-const z_flat_encoding_t *z_flat_encoding_video_h263(void);
-
-const z_flat_keyexpr_t *z_flat_query_keyexpr(const z_flat_query_t *q);
-
-const z_flat_encoding_t *z_flat_encoding_image_webp(void);
-
-const z_flat_encoding_t *z_flat_encoding_video_mp4(void);
-
-const z_flat_encoding_t *z_flat_encoding_video_vp8(void);
+const z_flat_encoding_t *z_flat_encoding_application_soap_xml(void);
 
 const z_flat_encoding_t *z_flat_encoding_application_sql(void);
 
-char *z_flat_zenoh_id_to_string(const z_flat_zenoh_id_t *z);
+const z_flat_encoding_t *z_flat_encoding_application_x_www_form_urlencoded(void);
 
-z_flat_config_t *z_flat_config_from_json(const char *s, z_flat_error_t *e);
+const z_flat_encoding_t *z_flat_encoding_application_xml(void);
+
+const z_flat_encoding_t *z_flat_encoding_application_yaml(void);
+
+const z_flat_encoding_t *z_flat_encoding_application_yang(void);
+
+const z_flat_encoding_t *z_flat_encoding_audio_aac(void);
+
+const z_flat_encoding_t *z_flat_encoding_audio_flac(void);
+
+const z_flat_encoding_t *z_flat_encoding_audio_mp4(void);
+
+const z_flat_encoding_t *z_flat_encoding_audio_ogg(void);
+
+const z_flat_encoding_t *z_flat_encoding_audio_vorbis(void);
+
+z_flat_encoding_t *z_flat_encoding_clone(const z_flat_encoding_t *e);
+
+void z_flat_encoding_drop(z_flat_encoding_t *this_);
+
+z_flat_encoding_t *z_flat_encoding_from_string(const char *s);
+
+int32_t z_flat_encoding_id(const z_flat_encoding_t *e);
+
+const z_flat_encoding_t *z_flat_encoding_image_bmp(void);
+
+const z_flat_encoding_t *z_flat_encoding_image_gif(void);
+
+const z_flat_encoding_t *z_flat_encoding_image_jpeg(void);
+
+const z_flat_encoding_t *z_flat_encoding_image_png(void);
+
+const z_flat_encoding_t *z_flat_encoding_image_webp(void);
+
+char *z_flat_encoding_schema(const z_flat_encoding_t *e);
+
+const z_flat_encoding_t *z_flat_encoding_text_css(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_csv(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_html(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_javascript(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_json(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_json5(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_markdown(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_plain(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_xml(void);
+
+const z_flat_encoding_t *z_flat_encoding_text_yaml(void);
+
+char *z_flat_encoding_to_string(const z_flat_encoding_t *e);
+
+const z_flat_encoding_t *z_flat_encoding_video_h261(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_h263(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_h264(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_h265(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_h266(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_mp4(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_ogg(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_raw(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_vp8(void);
+
+const z_flat_encoding_t *z_flat_encoding_video_vp9(void);
+
+const z_flat_encoding_t *z_flat_encoding_zenoh_bytes(void);
+
+const z_flat_encoding_t *z_flat_encoding_zenoh_serialized(void);
+
+const z_flat_encoding_t *z_flat_encoding_zenoh_string(void);
+
+void z_flat_free(void *p);
+
+void z_flat_hello_drop(z_flat_hello_t *this_);
+
+char **z_flat_hello_locators(const z_flat_hello_t *h, uintptr_t *len);
+
+z_flat_whatami_t z_flat_hello_whatami(const z_flat_hello_t *h);
+
+z_flat_zenoh_id_t *z_flat_hello_zid(const z_flat_hello_t *h);
+
+void z_flat_init_android_logs(const char *filter);
+
+void z_flat_init_zenoh_logs_from_env_or(const char *fallback_filter);
+
+z_flat_keyexpr_t *z_flat_keyexpr_autocanonize(const char *s, z_flat_error_t *e);
+
+z_flat_keyexpr_t *z_flat_keyexpr_clone(const z_flat_keyexpr_t *ke);
 
 z_flat_keyexpr_t *z_flat_keyexpr_concat(const z_flat_keyexpr_t *a,
                                         const char *b,
                                         z_flat_error_t *e);
 
-const z_flat_zbytes_t *z_flat_reply_error_payload(const z_flat_reply_t *r);
+void z_flat_keyexpr_drop(z_flat_keyexpr_t *this_);
 
-const z_flat_encoding_t *z_flat_encoding_application_jsonpath(void);
+bool z_flat_keyexpr_includes(const z_flat_keyexpr_t *a, const z_flat_keyexpr_t *b);
 
-void z_flat_init_android_logs(const char *filter);
+bool z_flat_keyexpr_intersects(const z_flat_keyexpr_t *a, const z_flat_keyexpr_t *b);
 
-const z_flat_encoding_t *z_flat_encoding_audio_aac(void);
+z_flat_keyexpr_t *z_flat_keyexpr_join(const z_flat_keyexpr_t *a, const char *b, z_flat_error_t *e);
 
-z_flat_subscriber_t *z_flat_session_declare_subscriber(const z_flat_session_t *session,
-                                                       z_flat_keyexpr_t *key_expr,
-                                                       z_flat_closure_sample_t callback,
-                                                       z_flat_closure_drop_t on_close,
-                                                       z_flat_error_t *e);
+char *z_flat_keyexpr_to_string(const z_flat_keyexpr_t *ke);
 
-const z_flat_encoding_t *z_flat_encoding_application_java_serialized_object(void);
-
-const z_flat_encoding_t *z_flat_encoding_audio_ogg(void);
-
-const z_flat_encoding_t *z_flat_encoding_image_bmp(void);
-
-const z_flat_encoding_t *z_flat_encoding_application_json_seq(void);
-
-char **z_flat_hello_locators(const z_flat_hello_t *h, uintptr_t *len);
-
-const z_flat_encoding_t *z_flat_encoding_image_gif(void);
-
-bool z_flat_reply_is_ok(const z_flat_reply_t *r);
-
-const z_flat_encoding_t *z_flat_encoding_application_protobuf(void);
-
-const z_flat_encoding_t *z_flat_encoding_text_markdown(void);
-
-const z_flat_encoding_t *z_flat_encoding_video_h266(void);
+z_flat_keyexpr_t *z_flat_keyexpr_try_from(const char *s, z_flat_error_t *e);
 
 z_flat_subscriber_t *z_flat_liveliness_declare_subscriber(const z_flat_session_t *session,
                                                           z_flat_keyexpr_t *key_expr,
@@ -321,18 +349,34 @@ z_flat_subscriber_t *z_flat_liveliness_declare_subscriber(const z_flat_session_t
                                                           z_flat_closure_drop_t on_close,
                                                           z_flat_error_t *e);
 
-bool z_flat_query_reply_success(const z_flat_query_t *query,
-                                const z_flat_keyexpr_t *key_expr,
-                                z_flat_zbytes_t *payload,
-                                const z_flat_encoding_t *encoding,
-                                const int64_t *timestamp_ntp64,
-                                z_flat_zbytes_t *attachment,
-                                bool express,
-                                z_flat_error_t *e);
+z_flat_liveliness_token_t *z_flat_liveliness_declare_token(const z_flat_session_t *session,
+                                                           z_flat_keyexpr_t *key_expr,
+                                                           z_flat_error_t *e);
 
-const z_flat_encoding_t *z_flat_encoding_text_css(void);
+bool z_flat_liveliness_get(const z_flat_session_t *session,
+                           const z_flat_keyexpr_t *key_expr,
+                           int64_t timeout_ms,
+                           z_flat_closure_reply_t callback,
+                           z_flat_closure_drop_t on_close,
+                           z_flat_error_t *e);
 
-z_flat_zenoh_id_t *z_flat_hello_zid(const z_flat_hello_t *h);
+void z_flat_liveliness_token_drop(z_flat_liveliness_token_t *this_);
+
+z_flat_session_t *z_flat_open(z_flat_config_t *config, z_flat_error_t *e);
+
+bool z_flat_publisher_delete(const z_flat_publisher_t *publisher,
+                             z_flat_zbytes_t *attachment,
+                             z_flat_error_t *e);
+
+void z_flat_publisher_drop(z_flat_publisher_t *this_);
+
+bool z_flat_publisher_put(const z_flat_publisher_t *publisher,
+                          z_flat_zbytes_t *payload,
+                          const z_flat_encoding_t *encoding,
+                          z_flat_zbytes_t *attachment,
+                          z_flat_error_t *e);
+
+void z_flat_querier_drop(z_flat_querier_t *this_);
 
 bool z_flat_querier_get(const z_flat_querier_t *querier,
                         const char *parameters,
@@ -343,77 +387,121 @@ bool z_flat_querier_get(const z_flat_querier_t *querier,
                         z_flat_closure_drop_t on_close,
                         z_flat_error_t *e);
 
-const z_flat_encoding_t *z_flat_encoding_application_octet_stream(void);
-
-const z_flat_encoding_t *z_flat_encoding_text_xml(void);
-
-const z_flat_encoding_t *z_flat_encoding_application_xml(void);
-
-z_flat_keyexpr_t *z_flat_keyexpr_clone(const z_flat_keyexpr_t *ke);
-
-const z_flat_encoding_t *z_flat_encoding_application_json_patch_json(void);
-
-char *z_flat_keyexpr_to_string(const z_flat_keyexpr_t *ke);
-
-const z_flat_encoding_t *z_flat_encoding_video_h264(void);
-
-z_flat_config_t *z_flat_config_from_file(const char *path, z_flat_error_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_video_raw(void);
-
-const z_flat_encoding_t *z_flat_encoding_text_javascript(void);
-
-z_flat_config_t *z_flat_config_default(void);
-
-int32_t z_flat_encoding_id(const z_flat_encoding_t *e);
-
-z_flat_liveliness_token_t *z_flat_liveliness_declare_token(const z_flat_session_t *session,
-                                                           z_flat_keyexpr_t *key_expr,
-                                                           z_flat_error_t *e);
-
-uint8_t *z_flat_zbytes_to_bytes(const z_flat_zbytes_t *z, uintptr_t *len);
-
-z_flat_congestion_control_t z_flat_sample_congestion_control(const z_flat_sample_t *s);
-
-char *z_flat_query_parameters(const z_flat_query_t *q);
-
-const z_flat_encoding_t *z_flat_encoding_application_soap_xml(void);
-
-void z_flat_try_init_zenoh_logs_from_env(void);
-
-z_flat_zenoh_id_t **z_flat_session_peers_zid(const z_flat_session_t *session, uintptr_t *len);
-
-uint8_t *z_flat_timestamp_id(const z_flat_timestamp_t *t, uintptr_t *len);
-
-int64_t z_flat_timestamp_ntp64(const z_flat_timestamp_t *t);
-
-char *z_flat_config_get_json(const z_flat_config_t *c, const char *key, z_flat_error_t *e);
-
-char *z_flat_encoding_to_string(const z_flat_encoding_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_video_vp9(void);
-
-const z_flat_encoding_t *z_flat_encoding_zenoh_bytes(void);
-
-const z_flat_encoding_t *z_flat_encoding_text_csv(void);
-
-const z_flat_encoding_t *z_flat_reply_error_encoding(const z_flat_reply_t *r);
-
-bool z_flat_publisher_delete(const z_flat_publisher_t *publisher,
-                             z_flat_zbytes_t *attachment,
-                             z_flat_error_t *e);
-
-z_flat_config_t *z_flat_config_clone(const z_flat_config_t *c);
-
-const z_flat_encoding_t *z_flat_encoding_application_mp4(void);
-
-z_flat_encoding_t *z_flat_encoding_from_string(const char *s);
+void z_flat_query_drop(z_flat_query_t *this_);
 
 const z_flat_encoding_t *z_flat_query_encoding(const z_flat_query_t *q);
 
-z_flat_keyexpr_t *z_flat_keyexpr_try_from(const char *s, z_flat_error_t *e);
+const z_flat_keyexpr_t *z_flat_query_keyexpr(const z_flat_query_t *q);
 
-z_flat_zenoh_id_t *z_flat_session_zid(const z_flat_session_t *session);
+char *z_flat_query_parameters(const z_flat_query_t *q);
+
+const z_flat_zbytes_t *z_flat_query_payload(const z_flat_query_t *q);
+
+bool z_flat_query_reply_delete(const z_flat_query_t *query,
+                               const z_flat_keyexpr_t *key_expr,
+                               const int64_t *timestamp_ntp64,
+                               z_flat_zbytes_t *attachment,
+                               bool express,
+                               z_flat_error_t *e);
+
+bool z_flat_query_reply_error(const z_flat_query_t *query,
+                              z_flat_zbytes_t *payload,
+                              const z_flat_encoding_t *encoding,
+                              z_flat_error_t *e);
+
+bool z_flat_query_reply_success(const z_flat_query_t *query,
+                                const z_flat_keyexpr_t *key_expr,
+                                z_flat_zbytes_t *payload,
+                                const z_flat_encoding_t *encoding,
+                                const int64_t *timestamp_ntp64,
+                                z_flat_zbytes_t *attachment,
+                                bool express,
+                                z_flat_error_t *e);
+
+void z_flat_queryable_drop(z_flat_queryable_t *this_);
+
+void z_flat_reply_drop(z_flat_reply_t *this_);
+
+const z_flat_encoding_t *z_flat_reply_error_encoding(const z_flat_reply_t *r);
+
+const z_flat_zbytes_t *z_flat_reply_error_payload(const z_flat_reply_t *r);
+
+bool z_flat_reply_is_ok(const z_flat_reply_t *r);
+
+const z_flat_sample_t *z_flat_reply_sample(const z_flat_reply_t *r);
+
+const z_flat_zbytes_t *z_flat_sample_attachment(const z_flat_sample_t *s);
+
+z_flat_congestion_control_t z_flat_sample_congestion_control(const z_flat_sample_t *s);
+
+void z_flat_sample_drop(z_flat_sample_t *this_);
+
+const z_flat_encoding_t *z_flat_sample_encoding(const z_flat_sample_t *s);
+
+bool z_flat_sample_express(const z_flat_sample_t *s);
+
+const z_flat_keyexpr_t *z_flat_sample_key_expr(const z_flat_sample_t *s);
+
+z_flat_sample_kind_t z_flat_sample_kind(const z_flat_sample_t *s);
+
+const z_flat_zbytes_t *z_flat_sample_payload(const z_flat_sample_t *s);
+
+z_flat_priority_t z_flat_sample_priority(const z_flat_sample_t *s);
+
+const z_flat_timestamp_t *z_flat_sample_timestamp(const z_flat_sample_t *s);
+
+z_flat_scout_t *z_flat_scout(int32_t whatami,
+                             const z_flat_config_t *config,
+                             z_flat_closure_hello_t callback,
+                             z_flat_closure_drop_t on_close,
+                             z_flat_error_t *e);
+
+void z_flat_scout_drop(z_flat_scout_t *this_);
+
+z_flat_keyexpr_t *z_flat_session_declare_keyexpr(const z_flat_session_t *session,
+                                                 const char *key_expr,
+                                                 z_flat_error_t *e);
+
+z_flat_publisher_t *z_flat_session_declare_publisher(const z_flat_session_t *session,
+                                                     z_flat_keyexpr_t *key_expr,
+                                                     z_flat_congestion_control_t congestion_control,
+                                                     z_flat_priority_t priority,
+                                                     bool express,
+                                                     z_flat_error_t *e);
+
+z_flat_querier_t *z_flat_session_declare_querier(const z_flat_session_t *session,
+                                                 z_flat_keyexpr_t *key_expr,
+                                                 z_flat_query_target_t target,
+                                                 z_flat_consolidation_mode_t consolidation,
+                                                 z_flat_congestion_control_t congestion_control,
+                                                 z_flat_priority_t priority,
+                                                 bool express,
+                                                 int64_t timeout_ms,
+                                                 z_flat_reply_key_expr_t accept_replies,
+                                                 z_flat_error_t *e);
+
+z_flat_queryable_t *z_flat_session_declare_queryable(const z_flat_session_t *session,
+                                                     z_flat_keyexpr_t *key_expr,
+                                                     bool complete,
+                                                     z_flat_closure_query_t callback,
+                                                     z_flat_closure_drop_t on_close,
+                                                     z_flat_error_t *e);
+
+z_flat_subscriber_t *z_flat_session_declare_subscriber(const z_flat_session_t *session,
+                                                       z_flat_keyexpr_t *key_expr,
+                                                       z_flat_closure_sample_t callback,
+                                                       z_flat_closure_drop_t on_close,
+                                                       z_flat_error_t *e);
+
+bool z_flat_session_delete(const z_flat_session_t *session,
+                           const z_flat_keyexpr_t *key_expr,
+                           z_flat_congestion_control_t congestion_control,
+                           z_flat_priority_t priority,
+                           bool express,
+                           z_flat_zbytes_t *attachment,
+                           z_flat_error_t *e);
+
+void z_flat_session_drop(z_flat_session_t *this_);
 
 bool z_flat_session_get(const z_flat_session_t *session,
                         const z_flat_keyexpr_t *key_expr,
@@ -432,113 +520,7 @@ bool z_flat_session_get(const z_flat_session_t *session,
                         z_flat_closure_drop_t on_close,
                         z_flat_error_t *e);
 
-bool z_flat_sample_express(const z_flat_sample_t *s);
-
-const z_flat_encoding_t *z_flat_encoding_application_cdr(void);
-
-z_flat_publisher_t *z_flat_session_declare_publisher(const z_flat_session_t *session,
-                                                     z_flat_keyexpr_t *key_expr,
-                                                     z_flat_congestion_control_t congestion_control,
-                                                     z_flat_priority_t priority,
-                                                     bool express,
-                                                     z_flat_error_t *e);
-
-const z_flat_zbytes_t *z_flat_sample_attachment(const z_flat_sample_t *s);
-
-const z_flat_encoding_t *z_flat_encoding_zenoh_string(void);
-
-const z_flat_encoding_t *z_flat_encoding_image_jpeg(void);
-
-z_flat_zenoh_id_t **z_flat_session_routers_zid(const z_flat_session_t *session, uintptr_t *len);
-
-bool z_flat_config_insert_json5(z_flat_config_t *c,
-                                const char *key,
-                                const char *value,
-                                z_flat_error_t *e);
-
-bool z_flat_keyexpr_intersects(const z_flat_keyexpr_t *a, const z_flat_keyexpr_t *b);
-
-const z_flat_encoding_t *z_flat_encoding_audio_mp4(void);
-
-char *z_flat_encoding_schema(const z_flat_encoding_t *e);
-
-bool z_flat_liveliness_get(const z_flat_session_t *session,
-                           const z_flat_keyexpr_t *key_expr,
-                           int64_t timeout_ms,
-                           z_flat_closure_reply_t callback,
-                           z_flat_closure_drop_t on_close,
-                           z_flat_error_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_application_python_serialized_object(void);
-
-const z_flat_encoding_t *z_flat_encoding_zenoh_serialized(void);
-
-const z_flat_sample_t *z_flat_reply_sample(const z_flat_reply_t *r);
-
-const z_flat_encoding_t *z_flat_encoding_video_h261(void);
-
-const z_flat_encoding_t *z_flat_encoding_audio_flac(void);
-
-z_flat_queryable_t *z_flat_session_declare_queryable(const z_flat_session_t *session,
-                                                     z_flat_keyexpr_t *key_expr,
-                                                     bool complete,
-                                                     z_flat_closure_query_t callback,
-                                                     z_flat_closure_drop_t on_close,
-                                                     z_flat_error_t *e);
-
-bool z_flat_session_undeclare_keyexpr(const z_flat_session_t *session,
-                                      z_flat_keyexpr_t *key_expr,
-                                      z_flat_error_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_video_h265(void);
-
-bool z_flat_keyexpr_includes(const z_flat_keyexpr_t *a, const z_flat_keyexpr_t *b);
-
-z_flat_whatami_t z_flat_hello_whatami(const z_flat_hello_t *h);
-
-uint8_t *z_flat_zenoh_id_to_bytes(const z_flat_zenoh_id_t *z, uintptr_t *len);
-
-bool z_flat_query_reply_error(const z_flat_query_t *query,
-                              z_flat_zbytes_t *payload,
-                              const z_flat_encoding_t *encoding,
-                              z_flat_error_t *e);
-
-z_flat_keyexpr_t *z_flat_session_declare_keyexpr(const z_flat_session_t *session,
-                                                 const char *key_expr,
-                                                 z_flat_error_t *e);
-
-z_flat_sample_kind_t z_flat_sample_kind(const z_flat_sample_t *s);
-
-const z_flat_encoding_t *z_flat_sample_encoding(const z_flat_sample_t *s);
-
-z_flat_config_t *z_flat_config_from_json5(const char *s, z_flat_error_t *e);
-
-z_flat_scout_t *z_flat_scout(int32_t whatami,
-                             const z_flat_config_t *config,
-                             z_flat_closure_hello_t callback,
-                             z_flat_closure_drop_t on_close,
-                             z_flat_error_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_application_coap_payload(void);
-
-void z_flat_init_zenoh_logs_from_env_or(const char *fallback_filter);
-
-const z_flat_encoding_t *z_flat_encoding_application_cbor(void);
-
-z_flat_encoding_t *z_flat_encoding_clone(const z_flat_encoding_t *e);
-
-z_flat_querier_t *z_flat_session_declare_querier(const z_flat_session_t *session,
-                                                 z_flat_keyexpr_t *key_expr,
-                                                 z_flat_query_target_t target,
-                                                 z_flat_consolidation_mode_t consolidation,
-                                                 z_flat_congestion_control_t congestion_control,
-                                                 z_flat_priority_t priority,
-                                                 bool express,
-                                                 int64_t timeout_ms,
-                                                 z_flat_reply_key_expr_t accept_replies,
-                                                 z_flat_error_t *e);
-
-const z_flat_encoding_t *z_flat_encoding_text_html(void);
+z_flat_zenoh_id_t **z_flat_session_peers_zid(const z_flat_session_t *session, uintptr_t *len);
 
 bool z_flat_session_put(const z_flat_session_t *session,
                         const z_flat_keyexpr_t *key_expr,
@@ -550,16 +532,34 @@ bool z_flat_session_put(const z_flat_session_t *session,
                         z_flat_zbytes_t *attachment,
                         z_flat_error_t *e);
 
-z_flat_priority_t z_flat_sample_priority(const z_flat_sample_t *s);
+z_flat_zenoh_id_t **z_flat_session_routers_zid(const z_flat_session_t *session, uintptr_t *len);
 
-const z_flat_encoding_t *z_flat_encoding_application_x_www_form_urlencoded(void);
+bool z_flat_session_undeclare_keyexpr(const z_flat_session_t *session,
+                                      z_flat_keyexpr_t *key_expr,
+                                      z_flat_error_t *e);
 
-z_flat_session_t *z_flat_open(z_flat_config_t *config, z_flat_error_t *e);
+z_flat_zenoh_id_t *z_flat_session_zid(const z_flat_session_t *session);
 
-const z_flat_encoding_t *z_flat_encoding_image_png(void);
+void z_flat_subscriber_drop(z_flat_subscriber_t *this_);
 
-const z_flat_timestamp_t *z_flat_sample_timestamp(const z_flat_sample_t *s);
+void z_flat_timestamp_drop(z_flat_timestamp_t *this_);
 
-z_flat_config_t *z_flat_config_from_yaml(const char *s, z_flat_error_t *e);
+uint8_t *z_flat_timestamp_id(const z_flat_timestamp_t *t, uintptr_t *len);
+
+int64_t z_flat_timestamp_ntp64(const z_flat_timestamp_t *t);
+
+void z_flat_try_init_zenoh_logs_from_env(void);
+
+void z_flat_zbytes_drop(z_flat_zbytes_t *this_);
+
+z_flat_zbytes_t *z_flat_zbytes_from_slice(const uint8_t *bytes, uintptr_t bytes_len);
+
+uint8_t *z_flat_zbytes_to_bytes(const z_flat_zbytes_t *z, uintptr_t *len);
+
+void z_flat_zenoh_id_drop(z_flat_zenoh_id_t *this_);
+
+uint8_t *z_flat_zenoh_id_to_bytes(const z_flat_zenoh_id_t *z, uintptr_t *len);
+
+char *z_flat_zenoh_id_to_string(const z_flat_zenoh_id_t *z);
 
 #endif  /* ZENOH_FLAT_H */
