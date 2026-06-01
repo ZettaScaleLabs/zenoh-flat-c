@@ -18,16 +18,11 @@
 #include "zenoh_constants.h"
 #include "zenoh_flat.h"
 
-// ── error mapping ──────────────────────────────────────────────────────────
-// Any flat error (a non-NULL `message`) becomes a generic failure code; the
-// message is released. Success is `Z_OK`.
-static inline z_result_t _z_map(z_flat_error_t e) {
-    if (e.message) {
-        z_flat_free(e.message);
-        return Z_EGENERIC;
-    }
-    return Z_OK;
-}
+// ── error handling ─────────────────────────────────────────────────────────
+// The generated `z_flat_*` wrappers tolerate a NULL error out-param (every
+// `*e =` write is guarded), and every fallible one also reports success via its
+// return value (non-NULL pointer / `true`). So we pass NULL for the error and
+// map the return value to a `z_result_t` — no `z_flat_error_t` plumbing needed.
 
 // ── owned / loaned / moved handle families ─────────────────────────────────
 // `zc` is the zenoh-c short name, `flat` the zenoh-flat base (they differ only
@@ -140,13 +135,11 @@ typedef struct z_view_keyexpr_t {
     z_flat_keyexpr_t* _0;
 } z_view_keyexpr_t;
 static inline z_result_t z_view_keyexpr_from_str(z_view_keyexpr_t* v, const char* s) {
-    z_flat_error_t e = {0};
-    v->_0 = z_flat_keyexpr_try_from(s, &e);
-    return _z_map(e);
+    v->_0 = z_flat_keyexpr_try_from(s, NULL);
+    return v->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_view_keyexpr_from_str_autocanonize(z_view_keyexpr_t* v, char* s) {
-    z_flat_error_t e = {0};
-    v->_0 = z_flat_keyexpr_autocanonize(s, &e);
+    v->_0 = z_flat_keyexpr_autocanonize(s, NULL);
     if (v->_0) {
         // zenoh-c canonicalizes the input buffer in place (canonical ≤ input).
         char* canon = z_flat_keyexpr_to_string(v->_0);
@@ -157,14 +150,13 @@ static inline z_result_t z_view_keyexpr_from_str_autocanonize(z_view_keyexpr_t* 
             z_flat_free(canon);
         }
     }
-    return _z_map(e);
+    return v->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_view_keyexpr_from_substr_autocanonize(z_view_keyexpr_t* v, char* start, size_t* len) {
     char* tmp = (char*)malloc(*len + 1);
     memcpy(tmp, start, *len);
     tmp[*len] = '\0';
-    z_flat_error_t e = {0};
-    v->_0 = z_flat_keyexpr_autocanonize(tmp, &e);
+    v->_0 = z_flat_keyexpr_autocanonize(tmp, NULL);
     if (v->_0) {
         // Reflect the (possibly shorter) canonical form back into the caller's
         // buffer + length, matching zenoh-c's in-place substr autocanonize.
@@ -177,7 +169,7 @@ static inline z_result_t z_view_keyexpr_from_substr_autocanonize(z_view_keyexpr_
         }
     }
     free(tmp);
-    return _z_map(e);
+    return v->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline bool z_view_keyexpr_is_empty(const z_view_keyexpr_t* v) { return v->_0 == NULL; }
 static inline const z_loaned_keyexpr_t* z_view_keyexpr_loan(const z_view_keyexpr_t* v) {
@@ -190,10 +182,9 @@ static inline z_result_t z_keyexpr_canonize(char* start, size_t* len) {
     char* tmp = (char*)malloc(*len + 1);
     memcpy(tmp, start, *len);
     tmp[*len] = '\0';
-    z_flat_error_t e = {0};
-    z_flat_keyexpr_t* ke = z_flat_keyexpr_autocanonize(tmp, &e);
+    z_flat_keyexpr_t* ke = z_flat_keyexpr_autocanonize(tmp, NULL);
     free(tmp);
-    if (!ke) return _z_map(e);
+    if (!ke) return Z_EGENERIC;
     char* canon = z_flat_keyexpr_to_string(ke);
     z_flat_keyexpr_drop(ke);
     if (!canon) return Z_EGENERIC;
@@ -342,28 +333,23 @@ static inline z_result_t z_config_default(z_owned_config_t* c) {
     return c->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t zc_config_from_file(z_owned_config_t* c, const char* path) {
-    z_flat_error_t e = {0};
-    c->_0 = z_flat_config_from_file(path, &e);
-    return _z_map(e);
+    c->_0 = z_flat_config_from_file(path, NULL);
+    return c->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t zc_config_from_str(z_owned_config_t* c, const char* s) {
-    z_flat_error_t e = {0};
-    c->_0 = z_flat_config_from_json5(s, &e);
-    return _z_map(e);
+    c->_0 = z_flat_config_from_json5(s, NULL);
+    return c->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t zc_config_insert_json5(z_loaned_config_t* c, const char* key, const char* value) {
-    z_flat_error_t e = {0};
-    z_flat_config_insert_json5((z_flat_config_t*)c, key, value, &e);
-    return _z_map(e);
+    return z_flat_config_insert_json5((z_flat_config_t*)c, key, value, NULL) ? Z_OK : Z_EGENERIC;
 }
 
 // ── session ───────────────────────────────────────────────────────────────────
 static inline z_result_t z_open(z_owned_session_t* s, z_moved_config_t* cfg, const z_open_options_t* opts) {
     (void)opts;
-    z_flat_error_t e = {0};
-    s->_0 = z_flat_open(cfg->_this._0, &e);
+    s->_0 = z_flat_open(cfg->_this._0, NULL);
     cfg->_this._0 = NULL;  // consumed
-    return _z_map(e);
+    return s->_0 ? Z_OK : Z_EGENERIC;
 }
 
 // zenoh-flat has no explicit session close — the real close happens when the
@@ -388,25 +374,23 @@ static inline z_result_t z_declare_keyexpr(const z_loaned_session_t* s, z_owned_
         out->_0 = NULL;
         return Z_EGENERIC;
     }
-    z_flat_error_t e = {0};
-    out->_0 = z_flat_session_declare_keyexpr((const z_flat_session_t*)s, str, &e);
+    out->_0 = z_flat_session_declare_keyexpr((const z_flat_session_t*)s, str, NULL);
     z_flat_free(str);
-    return _z_map(e);
+    return out->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_undeclare_keyexpr(const z_loaned_session_t* s, z_moved_keyexpr_t* m) {
-    z_flat_error_t e = {0};
+    bool ok = true;
     if (m->_this._0) {
-        z_flat_session_undeclare_keyexpr((const z_flat_session_t*)s, m->_this._0, &e);
+        ok = z_flat_session_undeclare_keyexpr((const z_flat_session_t*)s, m->_this._0, NULL);
         m->_this._0 = NULL;  // consumed
     }
-    return _z_map(e);
+    return ok ? Z_OK : Z_EGENERIC;
 }
 
 // ── keyexpr ─────────────────────────────────────────────────────────────────
 static inline z_result_t z_keyexpr_from_str(z_owned_keyexpr_t* k, const char* s) {
-    z_flat_error_t e = {0};
-    k->_0 = z_flat_keyexpr_try_from(s, &e);
-    return _z_map(e);
+    k->_0 = z_flat_keyexpr_try_from(s, NULL);
+    return k->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline void z_keyexpr_as_view_string(const z_loaned_keyexpr_t* ke, z_view_string_t* out) {
     char* s = z_flat_keyexpr_to_string((const z_flat_keyexpr_t*)ke);  // owned; view leaks (see README)
@@ -532,17 +516,16 @@ static inline z_result_t z_put(const z_loaned_session_t* s, const z_loaned_keyex
         }
     }
     const z_flat_encoding_t* enc = enc_owned ? enc_owned : z_flat_encoding_zenoh_bytes();
-    z_flat_error_t e = {0};
 #if defined(ZENOH_FLAT_UNSTABLE_API)
-    z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr, ex, att,
-                       opts ? opts->reliability : Reliable, &e);
+    bool ok = z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr,
+                                 ex, att, opts ? opts->reliability : Reliable, NULL);
 #else
-    z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr, ex, att,
-                       &e);
+    bool ok = z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr,
+                                 ex, att, NULL);
 #endif
     payload->_this._0 = NULL;
     if (enc_owned) z_flat_encoding_drop(enc_owned);
-    return _z_map(e);
+    return ok ? Z_OK : Z_EGENERIC;
 }
 
 static inline z_result_t z_delete(const z_loaned_session_t* s, const z_loaned_keyexpr_t* ke, z_delete_options_t* opts) {
@@ -554,14 +537,13 @@ static inline z_result_t z_delete(const z_loaned_session_t* s, const z_loaned_ke
         pr = opts->priority;
         ex = opts->is_express;
     }
-    z_flat_error_t e = {0};
 #if defined(ZENOH_FLAT_UNSTABLE_API)
-    z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL,
-                          opts ? opts->reliability : Reliable, &e);
+    bool ok = z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL,
+                                    opts ? opts->reliability : Reliable, NULL);
 #else
-    z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL, &e);
+    bool ok = z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL, NULL);
 #endif
-    return _z_map(e);
+    return ok ? Z_OK : Z_EGENERIC;
 }
 
 // ── publisher ────────────────────────────────────────────────────────────────
@@ -617,14 +599,13 @@ static inline z_result_t z_declare_publisher(const z_loaned_session_t* s, z_owne
         ex = opts->is_express;
     }
     z_flat_keyexpr_t* ke_owned = z_flat_keyexpr_clone((const z_flat_keyexpr_t*)ke);  // flat consumes
-    z_flat_error_t e = {0};
 #if defined(ZENOH_FLAT_UNSTABLE_API)
     p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex,
-                                             opts ? opts->reliability : Reliable, &e);
+                                             opts ? opts->reliability : Reliable, NULL);
 #else
-    p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex, &e);
+    p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex, NULL);
 #endif
-    return _z_map(e);
+    return p->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_publisher_put(const z_loaned_publisher_t* pub, z_moved_bytes_t* payload,
                                          z_publisher_put_options_t* opts) {
@@ -641,17 +622,14 @@ static inline z_result_t z_publisher_put(const z_loaned_publisher_t* pub, z_move
         }
     }
     const z_flat_encoding_t* enc = enc_owned ? enc_owned : z_flat_encoding_zenoh_bytes();
-    z_flat_error_t e = {0};
-    z_flat_publisher_put((const z_flat_publisher_t*)pub, payload->_this._0, enc, att, &e);
+    bool ok = z_flat_publisher_put((const z_flat_publisher_t*)pub, payload->_this._0, enc, att, NULL);
     payload->_this._0 = NULL;
     if (enc_owned) z_flat_encoding_drop(enc_owned);
-    return _z_map(e);
+    return ok ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_publisher_delete(const z_loaned_publisher_t* pub, void* opts) {
     (void)opts;
-    z_flat_error_t e = {0};
-    z_flat_publisher_delete((const z_flat_publisher_t*)pub, NULL, &e);
-    return _z_map(e);
+    return z_flat_publisher_delete((const z_flat_publisher_t*)pub, NULL, NULL) ? Z_OK : Z_EGENERIC;
 }
 
 // Matching-status listeners are not provided by zenoh-flat — stubbed as a no-op
@@ -700,10 +678,9 @@ static inline z_result_t z_declare_subscriber(const z_loaned_session_t* s, z_own
     z_flat_closure_sample_t fcb = {b, _z_call_sample, NULL};
     z_flat_closure_drop_t fclose = {b, _z_bridge_close, NULL};
     z_flat_keyexpr_t* ke_owned = z_flat_keyexpr_clone((const z_flat_keyexpr_t*)ke);
-    z_flat_error_t e = {0};
-    sub->_0 = z_flat_session_declare_subscriber((const z_flat_session_t*)s, ke_owned, fcb, fclose, &e);
+    sub->_0 = z_flat_session_declare_subscriber((const z_flat_session_t*)s, ke_owned, fcb, fclose, NULL);
     if (!sub->_0) free(b);  // declare failed: on_close won't fire
-    return _z_map(e);
+    return sub->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_undeclare_subscriber(z_moved_subscriber_t* m) {
     z_subscriber_drop(m);
@@ -724,10 +701,9 @@ static inline z_result_t z_declare_queryable(const z_loaned_session_t* s, z_owne
     z_flat_closure_query_t fcb = {b, _z_call_query, NULL};
     z_flat_closure_drop_t fclose = {b, _z_bridge_close, NULL};
     z_flat_keyexpr_t* ke_owned = z_flat_keyexpr_clone((const z_flat_keyexpr_t*)ke);
-    z_flat_error_t e = {0};
-    q->_0 = z_flat_session_declare_queryable((const z_flat_session_t*)s, ke_owned, complete, fcb, fclose, &e);
+    q->_0 = z_flat_session_declare_queryable((const z_flat_session_t*)s, ke_owned, complete, fcb, fclose, NULL);
     if (!q->_0) free(b);
-    return _z_map(e);
+    return q->_0 ? Z_OK : Z_EGENERIC;
 }
 static inline z_result_t z_undeclare_queryable(z_moved_queryable_t* m) {
     z_queryable_drop(m);
@@ -769,12 +745,11 @@ static inline z_result_t z_query_reply(const z_loaned_query_t* q, const z_loaned
         }
     }
     const z_flat_encoding_t* enc = enc_owned ? enc_owned : z_flat_encoding_zenoh_bytes();
-    z_flat_error_t e = {0};
-    z_flat_query_reply_success((const z_flat_query_t*)q, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, NULL, att,
-                               false, &e);
+    bool ok = z_flat_query_reply_success((const z_flat_query_t*)q, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc,
+                                         NULL, att, false, NULL);
     payload->_this._0 = NULL;
     if (enc_owned) z_flat_encoding_drop(enc_owned);
-    return _z_map(e);
+    return ok ? Z_OK : Z_EGENERIC;
 }
 
 // ── sample accessors ─────────────────────────────────────────────────────────
@@ -893,15 +868,14 @@ static inline z_result_t z_scout(z_moved_config_t* cfg, z_moved_closure_hello_t*
     _z_bridge_t* b = _z_bridge_new(cb->_this.context, (void*)cb->_this.call, cb->_this.drop);
     z_flat_closure_hello_t fcb = {b, _z_call_hello, NULL};
     z_flat_closure_drop_t fclose = {b, _z_bridge_close, NULL};
-    z_flat_error_t e = {0};
-    z_flat_scout_t* sc = z_flat_scout(7 /* Router|Peer|Client */, cfg->_this._0, fcb, fclose, &e);
+    z_flat_scout_t* sc = z_flat_scout(7 /* Router|Peer|Client */, cfg->_this._0, fcb, fclose, NULL);
     if (cfg->_this._0) {  // zenoh-c consumes the config; flat only borrowed it
         z_flat_config_drop(cfg->_this._0);
         cfg->_this._0 = NULL;
     }
     if (!sc) {
         free(b);
-        return _z_map(e);
+        return Z_EGENERIC;
     }
     struct _z_scout_timer_arg* arg = (struct _z_scout_timer_arg*)malloc(sizeof(*arg));
     arg->sc = sc;
