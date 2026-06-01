@@ -542,6 +542,8 @@ int64_t z_timestamp_ntp64(const z_timestamp_t *t);
 
 void z_try_init_zenoh_logs_from_env(void);
 
+z_zbytes_t *z_zbytes_clone(const z_zbytes_t *z);
+
 void z_zbytes_drop(z_zbytes_t *this_);
 
 z_zbytes_t *z_zbytes_from_slice(const uint8_t *bytes, uintptr_t bytes_len);

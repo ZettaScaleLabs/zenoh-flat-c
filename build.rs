@@ -414,6 +414,7 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_query_parameters),  // owned String → char*
         pq!(z_keyexpr_to_string), // owned String → char*
         pq!(z_encoding_clone),    // owned ZEncoding handle
+        pq!(z_zbytes_clone),      // owned ZZBytes handle (cheap refcount clone)
     ] {
         cbindgen = cbindgen.function(function).panic();
     }

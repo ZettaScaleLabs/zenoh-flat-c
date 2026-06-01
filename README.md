@@ -55,10 +55,17 @@ examples/tests against the `zenohflatc::lib` IMPORTED target.
 
 ## Examples
 
-`z_put`, `z_delete`, `z_pub`, `z_sub`, `z_queryable`, `z_get`, `z_scout`, `z_info` —
-written directly against the flat API (`examples/parse_args.h` provides config/CLI
-parsing). Run a pair against a local network, e.g. `build/examples/z_sub` +
-`build/examples/z_put`, or `build/examples/z_queryable` + `build/examples/z_get`.
+`z_put`, `z_delete`, `z_pub`, `z_sub`, `z_queryable`, `z_get`, `z_scout`, `z_info`,
+`z_pub_thr`, `z_sub_thr` — written directly against the flat API
+(`examples/parse_args.h` provides config/CLI parsing). Run a pair against a local
+network, e.g. `build/examples/z_sub` + `build/examples/z_put`, or
+`build/examples/z_queryable` + `build/examples/z_get`.
+
+`z_pub_thr <size>` + `z_sub_thr` are a throughput benchmark: the publisher puts a
+fixed-size payload in a tight loop (built once, then cheaply cloned via
+`z_zbytes_clone` since `z_publisher_put` consumes its payload), and the subscriber
+prints msg/s per measurement round (timed with the libc monotonic clock — the flat
+API has no `z_clock_*` helpers).
 
 `z_get` shows the callback form of get: zenoh-flat delivers each reply to a
 `z_closure_reply_t`, and `on_close` fires once the reply stream ends — the example
