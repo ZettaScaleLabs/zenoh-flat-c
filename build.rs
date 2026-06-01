@@ -42,7 +42,7 @@ fn generate_flat_bindings() -> PathBuf {
         // Single universal raw-memory freer for the `char*` data the layer hands
         // out (string returns + data-struct `String` fields). Opaque handles keep
         // their own typed `*_drop`.
-        .free_memory_function("z_free")
+        .free_memory_function("z_flat_free")
         // Base: strip the `Z` opaque-handle prefix, then `snake_case`, with the
         // few irregulars fixed in this one place (`KeyExpr`→`keyexpr` etc.).
         .mangle_rust_type(|short| {
@@ -54,22 +54,22 @@ fn generate_flat_bindings() -> PathBuf {
                 other => snake_case(other),
             }
         })
-        .mangle_type_name(|base| format!("z_{base}_t"))
-        .mangle_destructor(|base| format!("z_{base}_drop"))
+        // All C-facing names carry the `z_flat_` prefix so the plain `z_` namespace
+        // is free for a separate zenoh-c-compatible wrapper layered on top.
+        .mangle_type_name(|base| format!("z_flat_{base}_t"))
+        .mangle_destructor(|base| format!("z_flat_{base}_drop"))
         .mangle_callback(|bases| {
             if bases.is_empty() {
-                "z_closure_drop_t".to_string()
+                "z_flat_closure_drop_t".to_string()
             } else {
-                format!("z_closure_{}_t", bases.join("_"))
+                format!("z_flat_closure_{}_t", bases.join("_"))
             }
         })
-        // Functions are already `z_*` except the loggers — prefix those.
+        // Strip any leading `z_` then prefix `z_flat_` (`z_open`→`z_flat_open`,
+        // `init_android_logs`→`z_flat_init_android_logs`).
         .mangle_function(|n| {
-            if n.starts_with("z_") {
-                n.to_string()
-            } else {
-                format!("z_{n}")
-            }
+            let rest = n.strip_prefix("z_").unwrap_or(n);
+            format!("z_flat_{rest}")
         });
 
     for ty in [
@@ -366,6 +366,10 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_sample_express),
         pq!(z_sample_priority),
         pq!(z_sample_congestion_control),
+        pq!(z_query_keyexpr),     // &ZKeyExpr borrow
+        pq!(z_query_parameters),  // owned String → char*
+        pq!(z_keyexpr_to_string), // owned String → char*
+        pq!(z_encoding_clone),    // owned ZEncoding handle
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
@@ -382,6 +386,8 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_reply_sample),         // Option<ZSample>
         pq!(z_reply_error_payload),  // Option<ZZBytes>
         pq!(z_reply_error_encoding), // Option<ZEncoding>
+        pq!(z_query_payload),        // Option<&ZZBytes> borrow
+        pq!(z_query_encoding),       // Option<&ZEncoding> borrow
     ] {
         cbindgen = cbindgen.function(function).panic();
     }

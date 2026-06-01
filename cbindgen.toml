@@ -6,28 +6,28 @@ include_version = true
 style = "type"
 
 # Generic deleter for `Vec<T>` array returns (`T* + size_t`). Frees each element
-# with the caller-supplied `elem_drop` (`z_free` for `char*`, `z_<x>_drop` for an
-# opaque handle, a field-freer for a struct), then the malloc'd block via the
-# universal `z_free`. Plain scalar/POD arrays need only `z_free(array)`.
+# with the caller-supplied `elem_drop` (`z_flat_free` for `char*`, `z_flat_<x>_drop`
+# for an opaque handle, a field-freer for a struct), then the malloc'd block via the
+# universal `z_flat_free`. Plain scalar/POD arrays need only `z_flat_free(array)`.
 #
 # Placed via `after_includes` (not `trailer`) so it sits INSIDE the include
 # guard — `trailer` is emitted after `#endif`, which would redefine the macro on
 # a second include.
 after_includes = '''
 
-#define z_free_array(array, len, elem_drop) \
+#define z_flat_free_array(array, len, elem_drop) \
     do { \
         if (array) { \
             for (size_t _z_i = 0; _z_i < (size_t)(len); _z_i++) { \
                 elem_drop((array)[_z_i]); \
             } \
-            z_free((void *)(array)); \
+            z_flat_free((void *)(array)); \
         } \
     } while (0)'''
 
 [export]
 # The generated bindings declare the C allocator (`malloc`/`free`) via an
-# `extern "C"` block for the universal `z_free`; don't re-emit them into the
+# `extern "C"` block for the universal `z_flat_free`; don't re-emit them into the
 # public header (they already come from <stdlib.h>).
 exclude = ["malloc", "free"]
 
