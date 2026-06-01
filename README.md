@@ -55,6 +55,37 @@ examples/tests against the `zenohflatc::lib` IMPORTED target (dual-API include
 dir). `BUILD_SHARED_LIBS=ON` (default) links the dylib; `OFF` links the static
 lib (which pulls in the Rust/zenoh native deps).
 
+## Cargo features
+
+The feature flags mirror [zenoh-c](https://github.com/eclipse-zenoh/zenoh-c)
+and forward through `zenoh-flat` to the `zenoh` crate, with zenoh-c's exact
+**default** set: `auth_pubkey`, `auth_usrpwd`, `transport_multilink`,
+`transport_compression`, `transport_quic`, `transport_tcp`, `transport_tls`,
+`transport_udp`, `transport_unixsock-stream`, `transport_ws`,
+`transport_quic_datagram`. (Also available, off by default: `transport_serial`,
+`transport_unixpipe`, `transport_vsock`, `stats`, `shared-memory`, `unstable`.)
+
+`unstable` is **off by default** (like zenoh-c). It adds zenoh's unstable
+surface that zenoh-flat covers — the `reliability` QoS option, the
+`SetIntersectionLevel` keyexpr relation, and the reply `replier_id` — to the
+generated C ABI: e.g. `z_flat_session_put` gains a trailing `reliability` param,
+and `z_flat_reliability_t` / `z_flat_set_intersection_level_t` /
+`z_flat_keyexpr_relation_to` / `z_flat_reply_replier_*` appear.
+
+CMake exposes `-DZENOHFLATC_BUILD_WITH_UNSTABLE_API=ON` and
+`-DZENOHFLATC_BUILD_WITH_SHARED_MEMORY=ON` (default OFF), which pass
+`--features=unstable` / `--features=shared-memory` to cargo.
+
+`build.rs` emits `include/zenoh_flat_configure.h` defining `ZENOH_FLAT_UNSTABLE_API`
+(and `ZENOH_FLAT_SHARED_MEMORY`) when those features are on; the compat layer
+gates the `reliability` option-struct fields and call arity on it so the inline
+wrappers match the ABI the library was built with. Note this is an **internal**
+macro: we do *not* define zenoh-c's `Z_FEATURE_UNSTABLE_API`, because the compat
+layer implements only the `reliability` slice of zenoh-c's "unstable" surface
+(not transport/link introspection, matching listeners, source_info, …) — so
+zenoh-c programs' `#if defined(Z_FEATURE_UNSTABLE_API)` branches stay compiled
+out, and all ported examples/tests build under both feature modes.
+
 ## How the compat layer bridges to the flat ABI
 
 | zenoh-c | zenoh-flat-c | bridge |

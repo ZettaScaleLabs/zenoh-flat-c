@@ -31,6 +31,20 @@ endif()
 set(cargo_binary_dir "${CMAKE_CURRENT_SOURCE_DIR}/target/${cargo_profile_dir}")
 set(generated_header "${CMAKE_CURRENT_SOURCE_DIR}/include/zenoh_flat.h")
 
+# Feature toggles (mirror zenoh-c's ZENOHC_BUILD_WITH_*; default OFF). When set,
+# the corresponding Cargo feature is passed to `cargo build`, which forwards it
+# to zenoh-flat → zenoh. `unstable` adds the `reliability` QoS surface to the C
+# ABI (gated by `Z_FEATURE_UNSTABLE_API` in the headers).
+set(ZENOHFLATC_BUILD_WITH_UNSTABLE_API OFF CACHE BOOL "Enable the unstable API feature")
+set(ZENOHFLATC_BUILD_WITH_SHARED_MEMORY OFF CACHE BOOL "Enable the shared-memory feature")
+set(cargo_feature_flags "")
+if(ZENOHFLATC_BUILD_WITH_UNSTABLE_API)
+    list(APPEND cargo_feature_flags "--features=unstable")
+endif()
+if(ZENOHFLATC_BUILD_WITH_SHARED_MEMORY)
+    list(APPEND cargo_feature_flags "--features=shared-memory")
+endif()
+
 if(APPLE)
     set(static_lib_name "libzenoh_flat_c.a")
     set(shared_lib_name "libzenoh_flat_c.dylib")
@@ -51,15 +65,18 @@ file(GLOB_RECURSE rust_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
     "${CMAKE_CURRENT_SOURCE_DIR}/cbindgen.toml")
 
-add_custom_command(
-    OUTPUT "${static_lib}" "${shared_lib}" "${generated_header}"
-    COMMAND ${CMAKE_COMMAND} -E echo "cargo build ${cargo_profile_flag}"
-    COMMAND cargo build ${cargo_profile_flag}
+# Always invoke cargo (it is the real incremental engine, and — unlike a
+# CMake OUTPUT rule — it correctly rebuilds when the feature set changes, since
+# the static/shared lib filenames don't encode the features). The DEPENDS list
+# is kept for IDE source grouping.
+add_custom_target(cargo ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "cargo build ${cargo_profile_flag} ${cargo_feature_flags}"
+    COMMAND cargo build ${cargo_profile_flag} ${cargo_feature_flags}
+    BYPRODUCTS "${static_lib}" "${shared_lib}" "${generated_header}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    DEPENDS ${rust_sources}
+    SOURCES ${rust_sources}
     USES_TERMINAL
     VERBATIM)
-add_custom_target(cargo ALL DEPENDS "${static_lib}" "${shared_lib}" "${generated_header}")
 
 # ── imported library targets ───────────────────────────────────────────────
 add_library(zenohflatc_shared SHARED IMPORTED GLOBAL)

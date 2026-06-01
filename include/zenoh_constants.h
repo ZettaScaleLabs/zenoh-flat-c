@@ -40,9 +40,12 @@ typedef z_flat_congestion_control_t z_congestion_control_t;
 #define Z_CONGESTION_CONTROL_DROP Drop
 #define Z_CONGESTION_CONTROL_BLOCK Block
 
+// `z_flat_reliability_t` is only generated with the `unstable` feature.
+#if defined(ZENOH_FLAT_UNSTABLE_API)
 typedef z_flat_reliability_t z_reliability_t;
 #define Z_RELIABILITY_BEST_EFFORT BestEffort
 #define Z_RELIABILITY_RELIABLE Reliable
+#endif
 
 typedef z_flat_query_target_t z_query_target_t;
 #define Z_QUERY_TARGET_BEST_MATCHING BestMatching

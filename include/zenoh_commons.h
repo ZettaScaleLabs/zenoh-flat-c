@@ -368,7 +368,7 @@ static inline z_result_t z_open(z_owned_session_t* s, z_moved_config_t* cfg, con
 
 // zenoh-flat has no explicit session close — the real close happens when the
 // session handle is dropped. `z_close` is a no-op kept for API compatibility
-// (the simple path; the concurrent-close branch is Z_FEATURE_UNSTABLE_API-gated).
+// (the simple path; the concurrent-close branch is ZENOH_FLAT_UNSTABLE_API-gated).
 typedef struct z_close_options_t {
     uint8_t _dummy;
 } z_close_options_t;
@@ -420,7 +420,9 @@ static inline bool z_keyexpr_includes(const z_loaned_keyexpr_t* a, const z_loane
     return z_flat_keyexpr_includes((const z_flat_keyexpr_t*)a, (const z_flat_keyexpr_t*)b);
 }
 static inline bool z_keyexpr_equals(const z_loaned_keyexpr_t* a, const z_loaned_keyexpr_t* b) {
-    return z_flat_keyexpr_relation_to((const z_flat_keyexpr_t*)a, (const z_flat_keyexpr_t*)b) == Equals;
+    // Mutual inclusion ⇔ equality. (Avoids the unstable `relation_to`/`Equals`.)
+    return z_flat_keyexpr_includes((const z_flat_keyexpr_t*)a, (const z_flat_keyexpr_t*)b) &&
+           z_flat_keyexpr_includes((const z_flat_keyexpr_t*)b, (const z_flat_keyexpr_t*)a);
 }
 
 // ── bytes / payload ────────────────────────────────────────────────────────────
@@ -466,13 +468,17 @@ static inline z_result_t z_encoding_to_string(const z_loaned_encoding_t* e, z_ow
 }
 
 // ── put / delete / get options ───────────────────────────────────────────────
+// The `reliability` option is unstable in zenoh (and in zenoh-flat's C ABI);
+// the field and its plumbing are gated by `ZENOH_FLAT_UNSTABLE_API`.
 typedef struct z_put_options_t {
     z_moved_encoding_t* encoding;
     z_congestion_control_t congestion_control;
     z_priority_t priority;
     bool is_express;
     const void* timestamp;  // unsupported: ignored
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     z_reliability_t reliability;
+#endif
     z_moved_bytes_t* attachment;
 } z_put_options_t;
 static inline void z_put_options_default(z_put_options_t* o) {
@@ -481,7 +487,9 @@ static inline void z_put_options_default(z_put_options_t* o) {
     o->priority = Data;
     o->is_express = false;
     o->timestamp = NULL;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     o->reliability = Reliable;
+#endif
     o->attachment = NULL;
 }
 typedef struct z_delete_options_t {
@@ -489,14 +497,18 @@ typedef struct z_delete_options_t {
     z_priority_t priority;
     bool is_express;
     const void* timestamp;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     z_reliability_t reliability;
+#endif
 } z_delete_options_t;
 static inline void z_delete_options_default(z_delete_options_t* o) {
     o->congestion_control = Block;
     o->priority = Data;
     o->is_express = false;
     o->timestamp = NULL;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     o->reliability = Reliable;
+#endif
 }
 
 static inline z_result_t z_put(const z_loaned_session_t* s, const z_loaned_keyexpr_t* ke, z_moved_bytes_t* payload,
@@ -505,7 +517,6 @@ static inline z_result_t z_put(const z_loaned_session_t* s, const z_loaned_keyex
     z_congestion_control_t cc = Block;
     z_priority_t pr = Data;
     bool ex = false;
-    z_reliability_t rel = Reliable;
     z_flat_zbytes_t* att = NULL;
     if (opts) {
         if (opts->encoding) {
@@ -515,7 +526,6 @@ static inline z_result_t z_put(const z_loaned_session_t* s, const z_loaned_keyex
         cc = opts->congestion_control;
         pr = opts->priority;
         ex = opts->is_express;
-        rel = opts->reliability;
         if (opts->attachment) {
             att = opts->attachment->_this._0;
             opts->attachment->_this._0 = NULL;
@@ -523,8 +533,13 @@ static inline z_result_t z_put(const z_loaned_session_t* s, const z_loaned_keyex
     }
     const z_flat_encoding_t* enc = enc_owned ? enc_owned : z_flat_encoding_zenoh_bytes();
     z_flat_error_t e = {0};
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr, ex, att,
-                       rel, &e);
+                       opts ? opts->reliability : Reliable, &e);
+#else
+    z_flat_session_put((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, payload->_this._0, enc, cc, pr, ex, att,
+                       &e);
+#endif
     payload->_this._0 = NULL;
     if (enc_owned) z_flat_encoding_drop(enc_owned);
     return _z_map(e);
@@ -534,15 +549,18 @@ static inline z_result_t z_delete(const z_loaned_session_t* s, const z_loaned_ke
     z_congestion_control_t cc = Block;
     z_priority_t pr = Data;
     bool ex = false;
-    z_reliability_t rel = Reliable;
     if (opts) {
         cc = opts->congestion_control;
         pr = opts->priority;
         ex = opts->is_express;
-        rel = opts->reliability;
     }
     z_flat_error_t e = {0};
-    z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL, rel, &e);
+#if defined(ZENOH_FLAT_UNSTABLE_API)
+    z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL,
+                          opts ? opts->reliability : Reliable, &e);
+#else
+    z_flat_session_delete((const z_flat_session_t*)s, (const z_flat_keyexpr_t*)ke, cc, pr, ex, NULL, &e);
+#endif
     return _z_map(e);
 }
 
@@ -552,14 +570,18 @@ typedef struct z_publisher_options_t {
     z_congestion_control_t congestion_control;
     z_priority_t priority;
     bool is_express;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     z_reliability_t reliability;
+#endif
 } z_publisher_options_t;
 static inline void z_publisher_options_default(z_publisher_options_t* o) {
     o->encoding = NULL;
     o->congestion_control = Block;
     o->priority = Data;
     o->is_express = false;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     o->reliability = Reliable;
+#endif
 }
 typedef struct z_publisher_put_options_t {
     z_moved_encoding_t* encoding;
@@ -567,7 +589,9 @@ typedef struct z_publisher_put_options_t {
     z_priority_t priority;
     bool is_express;
     const void* timestamp;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     z_reliability_t reliability;
+#endif
     z_moved_bytes_t* attachment;
 } z_publisher_put_options_t;
 static inline void z_publisher_put_options_default(z_publisher_put_options_t* o) {
@@ -576,7 +600,9 @@ static inline void z_publisher_put_options_default(z_publisher_put_options_t* o)
     o->priority = Data;
     o->is_express = false;
     o->timestamp = NULL;
+#if defined(ZENOH_FLAT_UNSTABLE_API)
     o->reliability = Reliable;
+#endif
     o->attachment = NULL;
 }
 
@@ -585,16 +611,19 @@ static inline z_result_t z_declare_publisher(const z_loaned_session_t* s, z_owne
     z_congestion_control_t cc = Block;
     z_priority_t pr = Data;
     bool ex = false;
-    z_reliability_t rel = Reliable;
     if (opts) {
         cc = opts->congestion_control;
         pr = opts->priority;
         ex = opts->is_express;
-        rel = opts->reliability;
     }
     z_flat_keyexpr_t* ke_owned = z_flat_keyexpr_clone((const z_flat_keyexpr_t*)ke);  // flat consumes
     z_flat_error_t e = {0};
-    p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex, rel, &e);
+#if defined(ZENOH_FLAT_UNSTABLE_API)
+    p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex,
+                                             opts ? opts->reliability : Reliable, &e);
+#else
+    p->_0 = z_flat_session_declare_publisher((const z_flat_session_t*)s, ke_owned, cc, pr, ex, &e);
+#endif
     return _z_map(e);
 }
 static inline z_result_t z_publisher_put(const z_loaned_publisher_t* pub, z_moved_bytes_t* payload,

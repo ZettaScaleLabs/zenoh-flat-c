@@ -17,3 +17,38 @@ prebindgen = { path = "../prebindgen/prebindgen" }
 zenoh-flat = { path = "../zenoh-flat" }
 cbindgen = "0.29.0"
 syn = { version = "2.0", features = ["full"] }
+
+# Forward zenoh-c's feature set to zenoh-flat, with the same default set.
+# `unstable` adds the `Reliability` QoS surface to the generated C ABI (gated by
+# `Z_FEATURE_UNSTABLE_API` in the headers).
+[features]
+shared-memory = ["zenoh-flat/shared-memory"]
+unstable = ["zenoh-flat/unstable"]
+auth_pubkey = ["zenoh-flat/auth_pubkey"]
+auth_usrpwd = ["zenoh-flat/auth_usrpwd"]
+transport_multilink = ["zenoh-flat/transport_multilink"]
+transport_compression = ["zenoh-flat/transport_compression"]
+transport_quic = ["zenoh-flat/transport_quic"]
+transport_serial = ["zenoh-flat/transport_serial"]
+transport_unixpipe = ["zenoh-flat/transport_unixpipe"]
+transport_tcp = ["zenoh-flat/transport_tcp"]
+transport_tls = ["zenoh-flat/transport_tls"]
+transport_udp = ["zenoh-flat/transport_udp"]
+transport_unixsock-stream = ["zenoh-flat/transport_unixsock-stream"]
+transport_ws = ["zenoh-flat/transport_ws"]
+transport_vsock = ["zenoh-flat/transport_vsock"]
+transport_quic_datagram = ["zenoh-flat/transport_quic_datagram"]
+stats = ["zenoh-flat/stats"]
+default = [
+    "auth_pubkey",
+    "auth_usrpwd",
+    "transport_multilink",
+    "transport_compression",
+    "transport_quic",
+    "transport_tcp",
+    "transport_tls",
+    "transport_udp",
+    "transport_unixsock-stream",
+    "transport_ws",
+    "transport_quic_datagram",
+]
