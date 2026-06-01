@@ -262,7 +262,6 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(session_delete),
         pq!(session_get),
         pq!(session_put),
-        // Value-class zid accessors (return the `ZenohId` data twin) — JNI layer.
         pq!(session_zid),
         pq!(session_peers_zid),
         pq!(session_routers_zid),
