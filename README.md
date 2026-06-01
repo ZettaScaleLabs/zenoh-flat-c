@@ -55,9 +55,15 @@ examples/tests against the `zenohflatc::lib` IMPORTED target.
 
 ## Examples
 
-`z_put`, `z_delete`, `z_pub`, `z_sub`, `z_queryable`, `z_scout`, `z_info` — written
-directly against the flat API (`examples/parse_args.h` provides config/CLI parsing).
-Run a pair against a local network, e.g. `build/examples/z_sub` + `build/examples/z_put`.
+`z_put`, `z_delete`, `z_pub`, `z_sub`, `z_queryable`, `z_get`, `z_scout`, `z_info` —
+written directly against the flat API (`examples/parse_args.h` provides config/CLI
+parsing). Run a pair against a local network, e.g. `build/examples/z_sub` +
+`build/examples/z_put`, or `build/examples/z_queryable` + `build/examples/z_get`.
+
+`z_get` shows the callback form of get: zenoh-flat delivers each reply to a
+`z_closure_reply_t`, and `on_close` fires once the reply stream ends — the example
+blocks on a condition variable signalled by `on_close` (in lieu of zenoh-c's FIFO
+channel + `z_recv` loop, which has no flat-API equivalent).
 
 ## Tests (ctest)
 
@@ -94,7 +100,9 @@ extra `reliability` argument, so they build under both feature modes.
 
 ## Not yet covered
 
-The flat API wraps the closure-based core of zenoh. Not yet exposed: `z_get` and
-channels, the querier `get`, liveliness, shared memory, bytes serialization /
-reader / writer, and the value-class (`impl Into`) layer (reserved for a future
-JNI adapter).
+The flat API wraps the closure-based core of zenoh. Get **is** exposed in the
+async callback form (`z_session_get`, `z_querier_get`; see `z_get`). What's not
+exposed: the **channel/handler** sugar (`z_fifo_channel_*` / `z_ring_channel_*` /
+`z_recv`) zenoh-c builds on top of closures, liveliness, shared memory, bytes
+serialization / reader / writer, and the value-class (`impl Into`) layer (reserved
+for a future JNI adapter).
