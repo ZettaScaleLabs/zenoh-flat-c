@@ -31,7 +31,6 @@ typedef enum {
 typedef enum {
   Drop = 0,
   Block = 1,
-  BlockFirst = 2,
 } z_flat_congestion_control_t;
 
 typedef enum {
