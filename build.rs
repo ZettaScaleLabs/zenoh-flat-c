@@ -451,9 +451,22 @@ fn generate_c_headers(bindings_file: &PathBuf) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
+            // Also publish the flat header to the in-tree, deterministic
+            // `include/` dir so C consumers (and the CMake build) have a stable
+            // path. `include/` is the single dual-API directory: this generated
+            // `zenoh_flat.h` is the flat API; the committed `zenoh.h` family is
+            // the zenoh-c-compatible API layered on top.
+            let stable = PathBuf::from(&crate_dir).join("include").join("zenoh_flat.h");
+            if let Some(parent) = stable.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(e) = std::fs::copy(&header_path, &stable) {
+                println!("cargo:warning=Failed to copy header to include/: {e}");
+            }
             println!(
-                "cargo:warning=Generated C headers at: {}",
-                header_path.display()
+                "cargo:warning=Generated C headers at: {} (and {})",
+                header_path.display(),
+                stable.display()
             );
         }
         Err(e) => {
