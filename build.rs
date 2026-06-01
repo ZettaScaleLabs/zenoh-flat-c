@@ -4,6 +4,7 @@
 //! and run them through the `lang::Cbindgen` adapter to produce a Rust file of
 //! `extern "C"` wrappers. cbindgen part: turn that Rust file into a C header.
 
+use prebindgen::lang::snake_case;
 use std::path::PathBuf;
 use syn::parse_quote as pq;
 
@@ -32,65 +33,96 @@ fn generate_flat_bindings() -> PathBuf {
     // expensive: there the key expression is held string-side and the native
     // `ZKeyExpr` is materialized lazily. That layer belongs to the JNI adapter,
     // not the C one.
+    // Name-mangling rules: every C-facing name (types, destructors, callback
+    // structs, function symbols) is generated from the Rust type/function, so the
+    // declarations below carry no per-item `.name(...)`. The zenoh `z_…_t` / `z_…`
+    // convention lives here, in this consumer — `lang::Cbindgen` stays universal.
     let mut cbindgen = prebindgen::lang::Cbindgen::new()
         .source_module(pq!(zenoh_flat))
         // Single universal raw-memory freer for the `char*` data the layer hands
         // out (string returns + data-struct `String` fields). Opaque handles keep
         // their own typed `*_drop`.
-        .free_memory_function("z_free");
+        .free_memory_function("z_free")
+        // Base: strip the `Z` opaque-handle prefix, then `snake_case`, with the
+        // few irregulars fixed in this one place (`KeyExpr`→`keyexpr` etc.).
+        .mangle_rust_type(|short| {
+            let s = short.strip_prefix('Z').unwrap_or(short);
+            match s {
+                "KeyExpr" => "keyexpr".to_string(),
+                "ZBytes" => "zbytes".to_string(),
+                "WhatAmI" => "whatami".to_string(),
+                other => snake_case(other),
+            }
+        })
+        .mangle_type_name(|base| format!("z_{base}_t"))
+        .mangle_destructor(|base| format!("z_{base}_drop"))
+        .mangle_callback(|bases| {
+            if bases.is_empty() {
+                "z_closure_drop_t".to_string()
+            } else {
+                format!("z_closure_{}_t", bases.join("_"))
+            }
+        })
+        // Functions are already `z_*` except the loggers — prefix those.
+        .mangle_function(|n| {
+            if n.starts_with("z_") {
+                n.to_string()
+            } else {
+                format!("z_{n}")
+            }
+        });
 
-    for (ty, name, drop_name) in [
-        (pq!(ZKeyExpr), "z_keyexpr_t", "z_keyexpr_drop"),
-        (pq!(ZConfig), "z_config_t", "z_config_drop"),
-        (pq!(ZZenohId), "z_zenoh_id_t", "z_zenoh_id_drop"),
-        (pq!(ZHello), "z_hello_t", "z_hello_drop"),
-        (pq!(ZZBytes), "z_zbytes_t", "z_zbytes_drop"),
-        (pq!(ZEncoding), "z_encoding_t", "z_encoding_drop"),
-        (pq!(ZSession), "z_session_t", "z_session_drop"),
-        (pq!(ZReply), "z_reply_t", "z_reply_drop"),
-        (pq!(ZSample), "z_sample_t", "z_sample_drop"),
-        (pq!(ZTimestamp), "z_timestamp_t", "z_timestamp_drop"),
-        (pq!(ZPublisher), "z_publisher_t", "z_publisher_drop"),
-        (pq!(ZQuerier), "z_querier_t", "z_querier_drop"),
-        (pq!(ZQuery), "z_query_t", "z_query_drop"),
-        (pq!(ZLivelinessToken), "z_liveliness_token_t", "z_liveliness_token_drop"),
+    for ty in [
+        pq!(ZKeyExpr),
+        pq!(ZConfig),
+        pq!(ZZenohId),
+        pq!(ZHello),
+        pq!(ZZBytes),
+        pq!(ZEncoding),
+        pq!(ZSession),
+        pq!(ZReply),
+        pq!(ZSample),
+        pq!(ZTimestamp),
+        pq!(ZPublisher),
+        pq!(ZQuerier),
+        pq!(ZQuery),
+        pq!(ZLivelinessToken),
         // Returned by the callback-declaring APIs (subscriber/queryable/scout).
-        (pq!(ZSubscriber), "z_subscriber_t", "z_subscriber_drop"),
-        (pq!(ZQueryable), "z_queryable_t", "z_queryable_drop"),
-        (pq!(ZScout), "z_scout_t", "z_scout_drop"),
+        pq!(ZSubscriber),
+        pq!(ZQueryable),
+        pq!(ZScout),
     ] {
-        cbindgen = cbindgen.ptr_struct(ty).name(name).destructor_name(drop_name);
+        cbindgen = cbindgen.ptr_struct(ty);
     }
 
-    cbindgen = cbindgen.data_struct(pq!(Error)).name("z_error_t").error();
+    cbindgen = cbindgen.data_struct(pq!(Error)).error();
 
-    for (ty, name) in [
-        (pq!(SetIntersectionLevel), "z_set_intersection_level_t"),
-        (pq!(WhatAmI), "z_whatami_t"),
-        (pq!(CongestionControl), "z_congestion_control_t"),
-        (pq!(Priority), "z_priority_t"),
-        (pq!(Reliability), "z_reliability_t"),
-        (pq!(ConsolidationMode), "z_consolidation_mode_t"),
-        (pq!(QueryTarget), "z_query_target_t"),
-        (pq!(ReplyKeyExpr), "z_reply_key_expr_t"),
-        (pq!(SampleKind), "z_sample_kind_t"),
+    for ty in [
+        pq!(SetIntersectionLevel),
+        pq!(WhatAmI),
+        pq!(CongestionControl),
+        pq!(Priority),
+        pq!(Reliability),
+        pq!(ConsolidationMode),
+        pq!(QueryTarget),
+        pq!(ReplyKeyExpr),
+        pq!(SampleKind),
     ] {
-        cbindgen = cbindgen.enum_type(ty).name(name);
+        cbindgen = cbindgen.enum_type(ty);
     }
 
     // Callback signatures of the `z_*` opaque-handle tier. Each `impl Fn(handle)`
     // (plus the zero-arg `on_close`) emits a by-value `#[repr(C)]` closure struct
     // `{ context; call; drop }`; the C `call` receives an OWNED handle it must
-    // `z_<x>_drop`. The `z_closure_*_t` names are this consumer's convention —
-    // `lang::Cbindgen` derives a generic default otherwise.
-    for (ty, name) in [
-        (pq!(impl Fn(ZSample) + Send + Sync + 'static), "z_closure_sample_t"),
-        (pq!(impl Fn(ZReply) + Send + Sync + 'static), "z_closure_reply_t"),
-        (pq!(impl Fn(ZQuery) + Send + Sync + 'static), "z_closure_query_t"),
-        (pq!(impl Fn(ZHello) + Send + Sync + 'static), "z_closure_hello_t"),
-        (pq!(impl Fn() + Send + Sync + 'static), "z_closure_drop_t"),
+    // `z_<x>_drop`. Struct names come from the callback mangler (`z_closure_*_t`).
+    for ty in [
+        pq!(impl Fn(ZSample) + Send + Sync + 'static),
+        pq!(impl Fn(ZReply) + Send + Sync + 'static),
+        pq!(impl Fn(ZQuery) + Send + Sync + 'static),
+        pq!(impl Fn(ZHello) + Send + Sync + 'static),
+        pq!(impl Fn() + Send + Sync + 'static),
     ] {
-        cbindgen = cbindgen.callback(ty).name(name);
+        cbindgen = cbindgen.callback(ty);
     }
 
     for ty in [
@@ -373,15 +405,13 @@ fn generate_flat_bindings() -> PathBuf {
     // borrow is fallible, no `Result`, so `.panic()`).
     cbindgen = cbindgen.function(pq!(z_session_zid)).panic();
 
-    // Logger helpers. Keep the public C ABI on the existing `z_*` prefix.
+    // Logger helpers. The function mangler adds the `z_` prefix (these are the
+    // only declared functions not already `z_*`).
     cbindgen = cbindgen
         .function(pq!(init_android_logs))
-        .name("z_init_android_logs")
         .panic()
         .function(pq!(try_init_zenoh_logs_from_env))
-        .name("z_try_init_zenoh_logs_from_env")
         .function(pq!(init_zenoh_logs_from_env_or))
-        .name("z_init_zenoh_logs_from_env_or")
         .panic();
 
     let mut registry =
