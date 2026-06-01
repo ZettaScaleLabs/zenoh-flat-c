@@ -18,7 +18,7 @@
 #include "parse_args.h"
 #include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-queryable"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-c-queryable"
 #define DEFAULT_VALUE "Queryable from C!"
 
 struct args_t {
@@ -28,8 +28,8 @@ struct args_t {
 };
 struct args_t parse_args(int argc, char** argv, z_config_t** config);
 
-// The query handler receives an OWNED `z_query_t*` and must drop it. The
-// `context` carries the reply value string.
+// The query handler receives an owned `z_query_t*`. The `context` carries the
+// reply value string.
 void query_handler(z_query_t* query, void* context) {
     const char* value = (const char*)context;
 
@@ -50,11 +50,11 @@ void query_handler(z_query_t* query, void* context) {
     const z_keyexpr_t* reply_ke = z_query_keyexpr(query);  // borrowed; reply borrows it too
     z_zbytes_t* reply_payload = z_zbytes_from_slice((const uint8_t*)value, strlen(value));
     // `z_query_reply_success` borrows the query + keyexpr and consumes the payload.
-    z_query_reply_success(query, reply_ke, reply_payload, z_encoding_zenoh_bytes(), NULL, NULL, false, NULL);
+    z_query_reply_success(query, reply_ke, reply_payload, NULL, NULL, NULL, NULL, NULL);
 
     z_free(keyexpr);
     z_free(params);
-    z_query_drop(query);  // OWNED — release it
+    z_query_drop(query);
 }
 
 void on_close(void* arg) { (void)arg; }
@@ -82,8 +82,9 @@ int main(int argc, char** argv) {
     printf("Declaring Queryable on '%s'...\n", args.keyexpr);
     z_closure_query_t callback = {(void*)args.value, query_handler, NULL};
     z_closure_drop_t closer = {NULL, on_close, NULL};
+    bool complete = args.complete;
     // `declare_queryable` CONSUMES the key expression.
-    z_queryable_t* qable = z_session_declare_queryable(s, ke, args.complete, callback, closer, NULL);
+    z_queryable_t* qable = z_session_declare_queryable(s, ke, &complete, callback, closer, NULL);
     if (!qable) {
         printf("Unable to create queryable.\n");
         z_session_drop(s);

@@ -17,7 +17,7 @@
 #include "parse_args.h"
 #include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-put"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-c-put"
 
 struct args_t {
     char* keyexpr;  // -k, --key
@@ -46,11 +46,7 @@ int main(int argc, char** argv) {
     }
 
     // `z_session_delete` borrows the key expression.
-#if defined(ZENOH_FLAT_UNSTABLE_API)
-    bool ok = z_session_delete(s, ke, Block, Data, false, NULL, Reliable, NULL);
-#else
-    bool ok = z_session_delete(s, ke, Block, Data, false, NULL, NULL);
-#endif
+    bool ok = z_session_delete(s, ke, NULL, NULL, NULL, NULL, NULL);
     if (!ok) {
         printf("Delete failed...\n");
     }

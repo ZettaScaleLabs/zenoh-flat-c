@@ -29,7 +29,7 @@ const char* whatami_to_str(z_whatami_t w) {
     }
 }
 
-// The hello handler receives an OWNED `z_hello_t*` and must drop it.
+// The hello handler receives an owned `z_hello_t*`.
 void hello_handler(z_hello_t* hello, void* context) {
     (*(int*)context)++;
 
@@ -48,7 +48,7 @@ void hello_handler(z_hello_t* hello, void* context) {
     z_free_array(locators, n, z_free);  // free each locator string + the block
     z_free(zid_str);
     z_zenoh_id_drop(zid);
-    z_hello_drop(hello);  // OWNED — release it
+    z_hello_drop(hello);
 }
 
 void on_close(void* context) {

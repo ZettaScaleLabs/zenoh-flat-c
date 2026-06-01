@@ -26,7 +26,7 @@ struct args_t {
 struct args_t parse_args(int argc, char** argv, z_config_t** config);
 const char* kind_to_str(z_sample_kind_t kind);
 
-// The sample handler receives an OWNED `z_sample_t*` and must drop it. The
+// The sample handler receives a LOANED `z_sample_t*` valid only for the call. The
 // accessors (`z_sample_key_expr`, `z_sample_payload`, ...) return BORROWS valid
 // only while the sample is alive; the strings they materialize are owned and
 // must be `z_free`d.
@@ -51,7 +51,7 @@ void data_handler(z_sample_t* sample, void* arg) {
 
     z_free(keyexpr);
     z_free(payload);
-    z_sample_drop(sample);  // OWNED — release it
+    z_sample_drop(sample);
 }
 
 void on_close(void* arg) { (void)arg; }

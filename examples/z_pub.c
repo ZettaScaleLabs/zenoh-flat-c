@@ -18,13 +18,15 @@
 #include "parse_args.h"
 #include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-pub"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-c-pub"
 #define DEFAULT_VALUE "Pub from C!"
+#define DEFAULT_ATTACHMENT NULL
 
 struct args_t {
     char* keyexpr;     // -k, --key
     char* value;       // -p, --payload
     char* attachment;  // -a, --attach
+    bool add_matching_listener;  // --add-matching-listener
 };
 struct args_t parse_args(int argc, char** argv, z_config_t** config);
 
@@ -49,15 +51,14 @@ int main(int argc, char** argv) {
         return -1;
     }
     // `declare_publisher` CONSUMES the key expression.
-#if defined(ZENOH_FLAT_UNSTABLE_API)
-    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, Data, false, Reliable, NULL);
-#else
-    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, Data, false, NULL);
-#endif
+    z_publisher_t* pub = z_session_declare_publisher(s, ke, NULL, NULL, NULL, NULL);
     if (!pub) {
         printf("Unable to declare Publisher for key expression!\n");
         z_session_drop(s);
         return -1;
+    }
+    if (args.add_matching_listener) {
+        printf("Warning: --add-matching-listener is not supported by zenoh-flat-c yet and will be ignored.\n");
     }
 
     printf("Press CTRL-C to quit...\n");
@@ -88,7 +89,8 @@ void print_help() {
     Options:\n\
         -k, --key <KEYEXPR> (optional, string, default='%s'): The key expression to write to\n\
         -p, --payload <PAYLOAD> (optional, string, default='%s'): The value to write\n\
-        -a, --attach <ATTACHMENT> (optional, string): The attachment to add to each put\n",
+        -a, --attach <ATTACHMENT> (optional, string, default=NULL): The attachment to add to each put\n\
+        --add-matching-listener (optional): Add matching listener\n",
         DEFAULT_KEYEXPR, DEFAULT_VALUE);
     printf(COMMON_HELP);
 }
@@ -98,7 +100,8 @@ struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     struct args_t args;
     _Z_PARSE_ARG(args.keyexpr, "k", "key", (char*), (char*)DEFAULT_KEYEXPR);
     _Z_PARSE_ARG(args.value, "p", "payload", (char*), (char*)DEFAULT_VALUE);
-    _Z_PARSE_ARG(args.attachment, "a", "attach", (char*), NULL);
+    _Z_PARSE_ARG(args.attachment, "a", "attach", (char*), (char*)DEFAULT_ATTACHMENT);
+    args.add_matching_listener = _Z_CHECK_FLAG("add-matching-listener");
 
     parse_zenoh_common_args(argc, argv, config);
     const char* unknown_arg = check_unknown_opts(argc, argv);

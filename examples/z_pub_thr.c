@@ -54,10 +54,12 @@ int main(int argc, char** argv) {
 
     z_keyexpr_t* ke = z_keyexpr_try_from(keyexpr, NULL);
     // `declare_publisher` CONSUMES the key expression.
+    z_congestion_control_t congestion = Block;
+    bool express = args.express;
 #if defined(ZENOH_FLAT_UNSTABLE_API)
-    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, args.priority, args.express, Reliable, NULL);
+    z_publisher_t* pub = z_session_declare_publisher(s, ke, &congestion, &args.priority, &express, NULL, NULL);
 #else
-    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, args.priority, args.express, NULL);
+    z_publisher_t* pub = z_session_declare_publisher(s, ke, &congestion, &args.priority, &express, NULL);
 #endif
     if (!pub) {
         printf("Unable to declare publisher for key expression!\n");
@@ -73,7 +75,7 @@ int main(int argc, char** argv) {
     printf("Press CTRL-C to quit...\n");
     while (1) {
         z_zbytes_t* to_send = z_zbytes_clone(payload);
-        z_publisher_put(pub, to_send, z_encoding_zenoh_bytes(), NULL, NULL);
+        z_publisher_put(pub, to_send, NULL, NULL, NULL);
     }
 
     z_zbytes_drop(payload);

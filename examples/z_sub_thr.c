@@ -66,7 +66,7 @@ z_stats_t* z_stats_make(unsigned long max_rounds, unsigned long messages_per_rou
     return stats;
 }
 
-// The sample handler receives an OWNED `z_sample_t*` and must drop it.
+// The sample handler receives an owned `z_sample_t*`.
 void on_sample(z_sample_t* sample, void* context) {
     z_stats_t* stats = (z_stats_t*)context;
     if (stats->count == 0) {
@@ -83,11 +83,10 @@ void on_sample(z_sample_t* sample, void* context) {
         printf("%f msg/s\n", 1000.0 * stats->messages_per_round / elapsed_ms(&stats->start));
         stats->count = 0;
         if (stats->finished_rounds > stats->max_rounds) {
-            z_sample_drop(sample);
             exit(0);
         }
     }
-    z_sample_drop(sample);  // OWNED — release it
+    z_sample_drop(sample);
 }
 
 // Fired when the subscriber is dropped (clean shutdown).

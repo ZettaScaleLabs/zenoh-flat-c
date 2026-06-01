@@ -27,6 +27,7 @@
 #include "zenoh_flat.h"
 
 #define DEFAULT_SELECTOR "demo/example/**"
+#define DEFAULT_VALUE NULL
 #define DEFAULT_TIMEOUT_MS 10000
 
 struct args_t {
@@ -44,7 +45,7 @@ typedef struct {
     bool done;
 } done_signal_t;
 
-// The reply handler receives an OWNED `z_reply_t*` and must drop it.
+// The reply handler receives an owned `z_reply_t*`.
 void reply_handler(z_reply_t* reply, void* ctx) {
     (void)ctx;
     if (z_reply_is_ok(reply)) {
@@ -58,7 +59,7 @@ void reply_handler(z_reply_t* reply, void* ctx) {
     } else {
         printf(">> Received an error\n");
     }
-    z_reply_drop(reply);  // OWNED — release it
+    z_reply_drop(reply);
 }
 
 // Fired once when the reply stream ends (completion or timeout).
@@ -111,11 +112,12 @@ int main(int argc, char** argv) {
 
     z_closure_reply_t callback = {&sig, reply_handler, NULL};
     z_closure_drop_t closer = {&sig, on_close, NULL};
-
+    int64_t timeout_ms = (int64_t)args.timeout_ms;
+    z_query_target_t target = args.target;
     printf("Sending Query '%s'...\n", args.selector);
     // Borrows the key expression; consumes the payload; encoding is borrowed.
-    bool ok = z_session_get(s, ke, params, (int64_t)args.timeout_ms, args.target, Auto, Any, Block, Data, false,
-                            payload, z_encoding_zenoh_bytes(), NULL, callback, closer, NULL);
+    bool ok = z_session_get(s, ke, params, &timeout_ms, &target, NULL, NULL, NULL, NULL, NULL, payload, NULL, NULL,
+                            callback, closer, NULL);
     z_keyexpr_drop(ke);  // get only borrowed it
 
     if (ok) {
@@ -158,7 +160,7 @@ struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     struct args_t args;
     _Z_PARSE_ARG(args.selector, "s", "selector", (char*), (char*)DEFAULT_SELECTOR);
-    _Z_PARSE_ARG(args.value, "p", "payload", (char*), NULL);
+    _Z_PARSE_ARG(args.value, "p", "payload", (char*), (char*)DEFAULT_VALUE);
     _Z_PARSE_ARG(args.timeout_ms, "o", "timeout", atoi, DEFAULT_TIMEOUT_MS);
     _Z_PARSE_ARG(args.target, "t", "target", parse_query_target, BestMatching);
 

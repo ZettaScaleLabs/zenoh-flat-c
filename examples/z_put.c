@@ -17,7 +17,7 @@
 #include "parse_args.h"
 #include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-put"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-c-put"
 #define DEFAULT_VALUE "Put from C!"
 
 struct args_t {
@@ -47,13 +47,8 @@ int main(int argc, char** argv) {
         return -1;
     }
     z_zbytes_t* payload = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
-
     // `z_session_put` borrows the key expression and CONSUMES the payload.
-#if defined(ZENOH_FLAT_UNSTABLE_API)
-    bool ok = z_session_put(s, ke, payload, z_encoding_zenoh_bytes(), Block, Data, false, NULL, Reliable, NULL);
-#else
-    bool ok = z_session_put(s, ke, payload, z_encoding_zenoh_bytes(), Block, Data, false, NULL, NULL);
-#endif
+    bool ok = z_session_put(s, ke, payload, NULL, NULL, NULL, NULL, NULL, NULL);
     if (!ok) {
         printf("Put failed...\n");
     }
