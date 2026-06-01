@@ -54,6 +54,10 @@ fn generate_flat_bindings() -> PathBuf {
         (pq!(ZQuerier), "z_querier_t", "z_querier_drop"),
         (pq!(ZQuery), "z_query_t", "z_query_drop"),
         (pq!(ZLivelinessToken), "z_liveliness_token_t", "z_liveliness_token_drop"),
+        // Returned by the callback-declaring APIs (subscriber/queryable/scout).
+        (pq!(ZSubscriber), "z_subscriber_t", "z_subscriber_drop"),
+        (pq!(ZQueryable), "z_queryable_t", "z_queryable_drop"),
+        (pq!(ZScout), "z_scout_t", "z_scout_drop"),
     ] {
         cbindgen = cbindgen.ptr_struct(ty).name(name).destructor_name(drop_name);
     }
@@ -72,6 +76,21 @@ fn generate_flat_bindings() -> PathBuf {
         (pq!(SampleKind), "z_sample_kind_t"),
     ] {
         cbindgen = cbindgen.enum_type(ty).name(name);
+    }
+
+    // Callback signatures of the `z_*` opaque-handle tier. Each `impl Fn(handle)`
+    // (plus the zero-arg `on_close`) emits a by-value `#[repr(C)]` closure struct
+    // `{ context; call; drop }`; the C `call` receives an OWNED handle it must
+    // `z_<x>_drop`. The `z_closure_*_t` names are this consumer's convention —
+    // `lang::Cbindgen` derives a generic default otherwise.
+    for (ty, name) in [
+        (pq!(impl Fn(ZSample) + Send + Sync + 'static), "z_closure_sample_t"),
+        (pq!(impl Fn(ZReply) + Send + Sync + 'static), "z_closure_reply_t"),
+        (pq!(impl Fn(ZQuery) + Send + Sync + 'static), "z_closure_query_t"),
+        (pq!(impl Fn(ZHello) + Send + Sync + 'static), "z_closure_hello_t"),
+        (pq!(impl Fn() + Send + Sync + 'static), "z_closure_drop_t"),
+    ] {
+        cbindgen = cbindgen.callback(ty).name(name);
     }
 
     for ty in [
@@ -182,9 +201,10 @@ fn generate_flat_bindings() -> PathBuf {
         cbindgen = cbindgen.ignore_function(function);
     }
 
-    // The C layer intentionally stays on the simple callback-free Z-handle
-    // surface. Callback APIs and the generic/value-layer `impl Into(...)`
-    // wrappers remain out of scope for this step.
+    // The C layer wraps the `z_*` opaque-handle tier, now including its callback
+    // APIs (closure structs). The generic/value-layer `impl Into(...)` wrappers
+    // (and value-struct returns) remain out of scope — they belong to the JNI
+    // adapter.
     for function in [
         pq!(z_keyexpr_try_from),
         pq!(z_keyexpr_autocanonize),
@@ -210,6 +230,16 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_session_declare_publisher),
         pq!(z_session_declare_querier),
         pq!(z_query_reply_error),
+        // Callback APIs of the `z_*` tier (deliver opaque handles to a C closure
+        // struct + zero-arg on-close). All return `Result<_, Error>`, so fallible
+        // borrow/`Option` inputs route through the error out-param — no `.panic()`.
+        pq!(z_session_declare_subscriber),
+        pq!(z_session_declare_queryable),
+        pq!(z_session_get),
+        pq!(z_scout),
+        pq!(z_liveliness_get),
+        pq!(z_liveliness_declare_subscriber),
+        pq!(z_querier_get),
         // Put/delete/reply ops, unblocked by `Option<T>` input support.
         pq!(z_publisher_put),
         pq!(z_publisher_delete),
