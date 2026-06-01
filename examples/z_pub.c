@@ -13,87 +13,71 @@
 //
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "parse_args.h"
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-c-pub"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-pub"
 #define DEFAULT_VALUE "Pub from C!"
-#define DEFAULT_ATTACHMENT NULL
 
 struct args_t {
-    char* keyexpr;               // -k, --key
-    char* value;                 // -p, --payload
-    char* attachment;            // -a, --attach
-    bool add_matching_listener;  // --add-matching-listener
+    char* keyexpr;     // -k, --key
+    char* value;       // -p, --payload
+    char* attachment;  // -a, --attach
 };
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config);
-
-void matching_status_handler(const z_matching_status_t* matching_status, void* arg) {
-    if (matching_status->matching) {
-        printf("Publisher has matching subscribers.\n");
-    } else {
-        printf("Publisher has NO MORE matching subscribers.\n");
-    }
-}
+struct args_t parse_args(int argc, char** argv, z_config_t** config);
 
 int main(int argc, char** argv) {
-    zc_init_log_from_env_or("error");
+    z_init_zenoh_logs_from_env_or("error");
 
-    z_owned_config_t config;
+    z_config_t* config = NULL;
     struct args_t args = parse_args(argc, argv, &config);
 
     printf("Opening session...\n");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
+    z_session_t* s = z_open(config, NULL);
+    if (!s) {
         printf("Unable to open session!\n");
-        exit(-1);
+        return -1;
     }
 
     printf("Declaring Publisher on '%s'...\n", args.keyexpr);
-    z_owned_publisher_t pub;
-    z_view_keyexpr_t ke;
-    z_view_keyexpr_from_str(&ke, args.keyexpr);
-    if (z_declare_publisher(z_loan(s), &pub, z_loan(ke), NULL) < 0) {
-        printf("Unable to declare Publisher for key expression!\n");
-        exit(-1);
+    z_keyexpr_t* ke = z_keyexpr_try_from(args.keyexpr, NULL);
+    if (!ke) {
+        printf("%s is not a valid key expression\n", args.keyexpr);
+        z_session_drop(s);
+        return -1;
     }
-
-    if (args.add_matching_listener) {
-        z_owned_closure_matching_status_t callback;
-        z_closure(&callback, matching_status_handler, NULL, NULL);
-        if (z_publisher_declare_background_matching_listener(z_loan(pub), z_move(callback)) < 0) {
-            printf("Unable to declare background matching listener for key expression!\n");
-            exit(-1);
-        }
+    // `declare_publisher` CONSUMES the key expression.
+#if defined(ZENOH_FLAT_UNSTABLE_API)
+    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, Data, false, Reliable, NULL);
+#else
+    z_publisher_t* pub = z_session_declare_publisher(s, ke, Block, Data, false, NULL);
+#endif
+    if (!pub) {
+        printf("Unable to declare Publisher for key expression!\n");
+        z_session_drop(s);
+        return -1;
     }
 
     printf("Press CTRL-C to quit...\n");
     char buf[256] = {0};
     for (int idx = 0; 1; ++idx) {
-        z_sleep_s(1);
-        sprintf(buf, "[%4d] %s", idx, args.value);
+        sleep(1);
+        snprintf(buf, sizeof(buf), "[%4d] %s", idx, args.value);
         printf("Putting Data ('%s': '%s')...\n", args.keyexpr, buf);
-        z_publisher_put_options_t options;
-        z_publisher_put_options_default(&options);
 
-        z_owned_bytes_t payload;
-        z_bytes_copy_from_str(&payload, buf);
-        z_owned_bytes_t attachment;
-        if (args.attachment != NULL) {
-            z_bytes_copy_from_str(&attachment, args.attachment);
-            options.attachment = z_move(attachment);
+        z_zbytes_t* payload = z_zbytes_from_slice((const uint8_t*)buf, strlen(buf));
+        z_zbytes_t* attachment = NULL;
+        if (args.attachment) {
+            attachment = z_zbytes_from_slice((const uint8_t*)args.attachment, strlen(args.attachment));
         }
-        /// optional encoding
-        z_owned_encoding_t encoding;
-        z_encoding_clone(&encoding, z_encoding_text_plain());
-        options.encoding = z_move(encoding);
-
-        z_publisher_put(z_loan(pub), z_move(payload), &options);
+        // `publisher_put` consumes the payload + attachment.
+        z_publisher_put(pub, payload, z_encoding_text_plain(), attachment, NULL);
     }
 
-    z_drop(z_move(pub));
-    z_drop(z_move(s));
+    z_publisher_drop(pub);
+    z_session_drop(s);
     return 0;
 }
 
@@ -104,19 +88,17 @@ void print_help() {
     Options:\n\
         -k, --key <KEYEXPR> (optional, string, default='%s'): The key expression to write to\n\
         -p, --payload <PAYLOAD> (optional, string, default='%s'): The value to write\n\
-        -a, --attach <ATTACHMENT> (optional, string, default=NULL): The attachment to add to each put\n\
-        --add-matching-listener (optional): Add matching listener\n",
+        -a, --attach <ATTACHMENT> (optional, string): The attachment to add to each put\n",
         DEFAULT_KEYEXPR, DEFAULT_VALUE);
     printf(COMMON_HELP);
 }
 
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config) {
+struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     struct args_t args;
     _Z_PARSE_ARG(args.keyexpr, "k", "key", (char*), (char*)DEFAULT_KEYEXPR);
     _Z_PARSE_ARG(args.value, "p", "payload", (char*), (char*)DEFAULT_VALUE);
-    _Z_PARSE_ARG(args.attachment, "a", "attach", (char*), (char*)DEFAULT_ATTACHMENT);
-    args.add_matching_listener = _Z_CHECK_FLAG("add-matching-listener");
+    _Z_PARSE_ARG(args.attachment, "a", "attach", (char*), NULL);
 
     parse_zenoh_common_args(argc, argv, config);
     const char* unknown_arg = check_unknown_opts(argc, argv);

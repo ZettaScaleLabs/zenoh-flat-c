@@ -10,113 +10,78 @@
 //
 // Contributors:
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
-
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
+//
 #include <string.h>
 
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
 #undef NDEBUG
 #include <assert.h>
 
-void canonize() {
-    char keyexpr[256];
-    int8_t err;
-    size_t len_old, len_new;
+void test_create(void) {
+    // Valid key expressions parse; invalid ones return NULL (error reported via
+    // the return value — `e` is passed NULL).
+    z_keyexpr_t* ke = z_keyexpr_try_from("a/b/c", NULL);
+    assert(ke != NULL);
+    z_keyexpr_drop(ke);
 
-    strcpy(keyexpr, "a/**/**/c");
-    len_old = len_new = strlen(keyexpr);
-    printf("'%s', len = %zu -> ", keyexpr, len_old);
-    err = z_keyexpr_canonize(keyexpr, &len_new);
-    printf("'%s', len = %zu, err = %d\n", keyexpr, len_new, err);
-    assert(err == 0);
-    assert(len_new == len_old - 3);
-    assert(strcmp(keyexpr, "a/**/c") == 0);
-
-    strcpy(keyexpr, "a/**/**/c");
-    printf("'%s' -> ", keyexpr);
-    err = z_keyexpr_canonize_null_terminated(keyexpr);
-    printf("'%s', err = %d\n", keyexpr, err);
-    assert(err == 0);
-    assert(strcmp(keyexpr, "a/**/c") == 0);
-
-    strcpy(keyexpr, "a/**/**/c");
-    z_view_keyexpr_t key_expr_canonized;
-    z_view_keyexpr_from_str_autocanonize(&key_expr_canonized, keyexpr);
-    assert(z_view_keyexpr_is_empty(&key_expr_canonized) == false);
-    assert(strcmp(keyexpr, "a/**/c") == 0);
-    z_view_string_t key_exp_canonized_bytes;
-    z_keyexpr_as_view_string(z_loan(key_expr_canonized), &key_exp_canonized_bytes);
-    assert(z_string_len(z_loan(key_exp_canonized_bytes)) == len_new);
-    assert(strncmp(z_string_data(z_loan(key_exp_canonized_bytes)), "a/**/c", len_new) == 0);
-
-    strcpy(keyexpr, "a/**/**/c");
-    len_new = len_old;
-    int8_t res = z_view_keyexpr_from_substr_autocanonize(&key_expr_canonized, keyexpr, &len_new);
-    assert(res == 0);
-    assert(len_new == len_old - 3);
-    assert(strncmp(keyexpr, "a/**/c", len_new) == 0);
-    z_keyexpr_as_view_string(z_loan(key_expr_canonized), &key_exp_canonized_bytes);
-    assert(z_string_len(z_loan(key_exp_canonized_bytes)) == len_new);
-    assert(strncmp(z_string_data(z_loan(key_exp_canonized_bytes)), "a/**/c", len_new) == 0);
+    z_keyexpr_t* bad = z_keyexpr_try_from("a/**/**", NULL);  // ** adjacent → not canon
+    assert(bad == NULL);
 }
 
-void includes() {
-    z_view_keyexpr_t foobar, foostar;
-    z_view_keyexpr_from_str(&foobar, "foo/bar");
-    z_view_keyexpr_from_str(&foostar, "foo/*");
-
-    assert(z_keyexpr_includes(z_loan(foostar), z_loan(foobar)) == true);
-    assert(z_keyexpr_includes(z_loan(foobar), z_loan(foostar)) == false);
+void test_to_string(void) {
+    z_keyexpr_t* ke = z_keyexpr_try_from("a/b/c", NULL);
+    assert(ke != NULL);
+    char* s = z_keyexpr_to_string(ke);
+    assert(s != NULL && strcmp(s, "a/b/c") == 0);
+    z_free(s);
+    z_keyexpr_drop(ke);
 }
 
-void intersects() {
-    z_view_keyexpr_t foobar, foostar, barstar;
-    z_view_keyexpr_from_str(&foobar, "foo/bar");
-    z_view_keyexpr_from_str(&foostar, "foo/*");
-    z_view_keyexpr_from_str(&barstar, "bar/*");
+void test_relations(void) {
+    z_keyexpr_t* pattern = z_keyexpr_try_from("a/*/c", NULL);
+    z_keyexpr_t* exact = z_keyexpr_try_from("a/b/c", NULL);
+    assert(pattern && exact);
 
-    assert(z_keyexpr_intersects(z_loan(foostar), z_loan(foobar)) == true);
-    assert(z_keyexpr_intersects(z_loan(barstar), z_loan(foobar)) == false);
-}
+    assert(z_keyexpr_intersects(pattern, exact));
+    assert(z_keyexpr_includes(pattern, exact));
+    assert(!z_keyexpr_includes(exact, pattern));
 
-void undeclare() {
-    z_owned_config_t config;
-    z_config_default(&config);
-    z_owned_session_t s;
-    z_open(&s, z_move(config), NULL);
-
-    z_view_keyexpr_t view_ke;
-    z_view_keyexpr_from_str(&view_ke, "test/thr");
-    z_owned_keyexpr_t ke;
-    z_declare_keyexpr(z_loan(s), &ke, z_loan(view_ke));
-    assert(z_internal_keyexpr_check(&ke));
-    z_undeclare_keyexpr(z_loan(s), z_move(ke));
-    assert(!z_internal_keyexpr_check(&ke));
-}
-
-#if defined(Z_FEATURE_UNSTABLE_API)
-void relation_to() {
-    z_view_keyexpr_t foobar, foostar, barstar;
-    z_view_keyexpr_from_str(&foobar, "foo/bar");
-    z_view_keyexpr_from_str(&foostar, "foo/*");
-    z_view_keyexpr_from_str(&barstar, "bar/*");
-
-    assert(z_keyexpr_relation_to(z_loan(foostar), z_loan(foobar)) == Z_KEYEXPR_INTERSECTION_LEVEL_INCLUDES);
-    assert(z_keyexpr_relation_to(z_loan(foobar), z_loan(foostar)) == Z_KEYEXPR_INTERSECTION_LEVEL_INTERSECTS);
-    assert(z_keyexpr_relation_to(z_loan(foostar), z_loan(foostar)) == Z_KEYEXPR_INTERSECTION_LEVEL_EQUALS);
-    assert(z_keyexpr_relation_to(z_loan(barstar), z_loan(foobar)) == Z_KEYEXPR_INTERSECTION_LEVEL_DISJOINT);
-}
+#if defined(ZENOH_FLAT_UNSTABLE_API)
+    assert(z_keyexpr_relation_to(exact, exact) == Equals);
+    assert(z_keyexpr_relation_to(pattern, exact) == Includes);
 #endif
 
-int main(int argc, char **argv) {
-    canonize();
-    includes();
-    intersects();
-    undeclare();
-#if defined(Z_FEATURE_UNSTABLE_API)
-    relation_to();
-#endif
+    z_keyexpr_drop(pattern);
+    z_keyexpr_drop(exact);
+}
+
+void test_autocanonize(void) {
+    // The canonical form of "a/**/**/c" is "a/**/c".
+    z_keyexpr_t* ke = z_keyexpr_autocanonize("a/**/**/c", NULL);
+    assert(ke != NULL);
+    char* s = z_keyexpr_to_string(ke);
+    assert(s != NULL && strcmp(s, "a/**/c") == 0);
+    z_free(s);
+    z_keyexpr_drop(ke);
+}
+
+void test_concat_join(void) {
+    z_keyexpr_t* a = z_keyexpr_try_from("a/b", NULL);
+    z_keyexpr_t* joined = z_keyexpr_join(a, "c/d", NULL);
+    assert(joined != NULL);
+    char* s = z_keyexpr_to_string(joined);
+    assert(s != NULL && strcmp(s, "a/b/c/d") == 0);
+    z_free(s);
+    z_keyexpr_drop(joined);
+    z_keyexpr_drop(a);
+}
+
+int main(void) {
+    test_create();
+    test_to_string();
+    test_relations();
+    test_autocanonize();
+    test_concat_join();
+    return 0;
 }

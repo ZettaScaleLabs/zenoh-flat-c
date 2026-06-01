@@ -11,14 +11,24 @@
 // Contributors:
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 //
+// CLI argument + configuration parsing helper for the zenoh-flat-c examples,
+// written against the flat `z_*` API (heap-pointer config handle).
+//
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "zenoh.h"
+#include "zenoh_flat.h"
+
+// Configuration keys (zenoh JSON5 paths).
+#define Z_CONFIG_MODE_KEY "mode"
+#define Z_CONFIG_CONNECT_KEY "connect/endpoints"
+#define Z_CONFIG_LISTEN_KEY "listen/endpoints"
+#define Z_CONFIG_MULTICAST_SCOUTING_KEY "scouting/multicast/enabled"
 
 #define COMMON_HELP \
     "\
@@ -68,12 +78,6 @@
 /**
  * Parse an option of format `-f`, `--flag`, `-f <value>` or `--flag <value>` from `argv`. If found, the option and its
  * eventual value are each replaced by NULL in `argv`
- * @param argc: argc passed from `main` function
- * @param argv: argv passed from `main` function
- * @param opt: option to parse (without `-` or `--` prefix)
- * @param opt_has_value: if true, the option is of format `-f <value>` or `--flag <value>` and `value` will be returned
- * if found, else an error message is printed and program will exit. If false, option has no value and a non-null
- * pointer will be returned if option is found.
  * @returns NULL if option was not found, else a non-null value depending on if `opt_has_value`.
  */
 const char* parse_opt(int argc, char** argv, const char* opt, bool opt_has_value) {
@@ -127,9 +131,7 @@ const char* parse_opt(int argc, char** argv, const char* opt, bool opt_has_value
 }
 
 /**
- * Check if any options remains in `argv`. Must be called after all expected options are parsed
- * @param argc
- * @param argv
+ * Check if any options remains in `argv`. Must be called after all expected options are parsed.
  * @returns NULL if no option was found, else the first option string that was found
  */
 const char* check_unknown_opts(int argc, char** const argv) {
@@ -142,14 +144,7 @@ const char* check_unknown_opts(int argc, char** const argv) {
 }
 
 /**
- * Parse positional arguments from `argv`. Must be called after all expected options are parsed, and after checking that
- * no unknown options remain in `argv`
- * @param argc
- * @param argv
- * @param nb_args: number of expected positional arguments
- * @returns NULL if found more positional arguments than `nb_args`. Else an array of found arguments in order, followed
- * by NULL values if found less positional arguments than `nb_args`
- * @note Returned pointer is dynamically allocated and must be freed
+ * Parse positional arguments from `argv`. Returned pointer is dynamically allocated and must be freed.
  */
 char** parse_pos_args(const int argc, char** argv, const size_t nb_args) {
     char** pos_argv = (char**)calloc(nb_args, sizeof(char*));
@@ -168,16 +163,10 @@ char** parse_pos_args(const int argc, char** argv, const size_t nb_args) {
 }
 
 /**
- * Parse zenoh options that require a JSON-serialized list (-e, -l from common args) and add them to
- * `config`. Prints error message and exits if fails to insert parsed values
- * @param argc
- * @param argv
- * @param opt: option to parse (without `-` or `--` prefix)
- * @param config: address of an owned zenoh configuration
- * @param config_key: zenoh configuration key under which the parsed values will be inserted
+ * Parse a repeated endpoint option (-e/-l) into a JSON list and insert it under `config_key`.
  */
 void parse_zenoh_json_list_config(int argc, char** argv, const char* opt_short, const char* opt_long,
-                                  const char* config_key, z_owned_config_t* config) {
+                                  const char* config_key, z_config_t* config) {
     char* buf = (char*)calloc(1, sizeof(char));
     const char* value;
     _Z_PARSE_ARG(value, opt_short, opt_long, (const char*), NULL);
@@ -191,19 +180,13 @@ void parse_zenoh_json_list_config(int argc, char** argv, const char* opt_short, 
     }
     size_t buflen = strlen(buf);
     if (buflen > 0) {
-        // remove trailing comma
-        buf[buflen - 1] = '\0';
+        buf[buflen - 1] = '\0';  // remove trailing comma
         buflen--;
-        // add list delimiters
         size_t json_list_len = buflen + 3;  // buf + brackets + nullbyte
         char* json_list = (char*)malloc(json_list_len);
         snprintf(json_list, json_list_len, "[%s]", buf);
-        // insert in config
-        if (zc_config_insert_json5(z_loan_mut(*config), config_key, json_list) < 0) {
-            printf(
-                "Couldn't insert value `%s` in configuration at `%s`\n`%s` is either not a JSON-serialized list of "
-                "strings, or values within the list do not respect expected format for `%s`\n",
-                json_list, config_key, json_list, config_key);
+        if (!z_config_insert_json5(config, config_key, json_list, NULL)) {
+            printf("Couldn't insert value `%s` in configuration at `%s`\n", json_list, config_key);
             free(json_list);
             exit(-1);
         }
@@ -212,7 +195,7 @@ void parse_zenoh_json_list_config(int argc, char** argv, const char* opt_short, 
     free(buf);
 }
 
-void parse_zenoh_json_list_cfg(int argc, char** argv, const char* opt_long, z_owned_config_t* config) {
+void parse_zenoh_json_list_cfg(int argc, char** argv, const char* opt_long, z_config_t* config) {
     char* buf = (char*)calloc(1, sizeof(char));
     const char* value;
     _Z_PARSE_ARG_SINGLE_OPT(value, opt_long, (char*), NULL);
@@ -225,8 +208,8 @@ void parse_zenoh_json_list_cfg(int argc, char** argv, const char* opt_long, z_ow
         *pos = 0;
         const char* key = value;
         const char* val = pos + 1;
-        if (zc_config_insert_json5(z_loan_mut(*config), key, val) < 0) {
-            printf("Couldn't insert value `%s` in configuration at `%s`\n", key, val);
+        if (!z_config_insert_json5(config, key, val, NULL)) {
+            printf("Couldn't insert value `%s` in configuration at `%s`\n", val, key);
             exit(-1);
         }
         _Z_PARSE_ARG_SINGLE_OPT(value, opt_long, (char*), NULL);
@@ -234,20 +217,22 @@ void parse_zenoh_json_list_cfg(int argc, char** argv, const char* opt_long, z_ow
 }
 
 /**
- * Parse zenoh options that are common to all examples (-c, -m, -e, -l, --no-multicast-scouting) and add them to
- * `config`
- * @param argc
- * @param argv
- * @param config: address of an owned zenoh configuration
+ * Parse the options common to all examples (-c, -m, -e, -l, --cfg, --no-multicast-scouting) and
+ * build the session configuration. On return, `*config` owns a `z_config_t*` (drop with
+ * `z_config_drop`, or pass to `z_open` which consumes it).
  */
-void parse_zenoh_common_args(const int argc, char** argv, z_owned_config_t* config) {
+void parse_zenoh_common_args(const int argc, char** argv, z_config_t** config) {
     // -c, --config: A configuration file.
     const char* config_file;
     _Z_PARSE_ARG(config_file, "c", "config", (const char*), NULL);
     if (config_file) {
-        zc_config_from_file(config, config_file);
+        *config = z_config_from_file(config_file, NULL);
+        if (!*config) {
+            printf("Couldn't read configuration from file `%s`\n", config_file);
+            exit(-1);
+        }
     } else {
-        z_config_default(config);
+        *config = z_config_default();
     }
     // -m: The Zenoh session mode [default: peer].
     const char* mode;
@@ -256,26 +241,20 @@ void parse_zenoh_common_args(const int argc, char** argv, z_owned_config_t* conf
         size_t buflen = strlen(mode) + 3;  // mode + quotes + nullbyte
         char* buf = (char*)malloc(buflen);
         snprintf(buf, buflen, "'%s'", mode);
-        if (zc_config_insert_json5(z_loan_mut(*config), Z_CONFIG_MODE_KEY, buf) < 0) {
+        if (!z_config_insert_json5(*config, Z_CONFIG_MODE_KEY, buf, NULL)) {
             printf(
-                "Couldn't insert value `%s` in configuration at `%s`. Value must be one of: 'client', 'peer' or "
-                "'router'\n",
+                "Couldn't insert value `%s` at `%s`. Value must be one of: 'client', 'peer' or 'router'\n",
                 mode, Z_CONFIG_MODE_KEY);
             free(buf);
             exit(-1);
         }
         free(buf);
     }
-    // -e: Endpoint to connect to. Can be repeated
-    parse_zenoh_json_list_config(argc, argv, "e", "connect", Z_CONFIG_CONNECT_KEY, config);
-    // -l: Endpoint to listen on. Can be repeated
-    parse_zenoh_json_list_config(argc, argv, "l", "listen", Z_CONFIG_LISTEN_KEY, config);
-    // -cfg: Config entires. Can be repeated
-    parse_zenoh_json_list_cfg(argc, argv, "cfg", config);
-    // --no-multicast-scrouting: Disable the multicast-based scouting mechanism.
+    parse_zenoh_json_list_config(argc, argv, "e", "connect", Z_CONFIG_CONNECT_KEY, *config);
+    parse_zenoh_json_list_config(argc, argv, "l", "listen", Z_CONFIG_LISTEN_KEY, *config);
+    parse_zenoh_json_list_cfg(argc, argv, "cfg", *config);
     bool no_multicast_scouting = _Z_CHECK_FLAG("no-multicast-scouting");
-    if (no_multicast_scouting &&
-        zc_config_insert_json5(z_loan_mut(*config), Z_CONFIG_MULTICAST_SCOUTING_KEY, "false") < 0) {
+    if (no_multicast_scouting && !z_config_insert_json5(*config, Z_CONFIG_MULTICAST_SCOUTING_KEY, "false", NULL)) {
         printf("Couldn't disable multicast-scouting.\n");
         exit(-1);
     }
@@ -283,11 +262,11 @@ void parse_zenoh_common_args(const int argc, char** argv, z_owned_config_t* conf
 
 z_query_target_t parse_query_target(const char* arg) {
     if (strcmp(arg, "BEST_MATCHING") == 0) {
-        return Z_QUERY_TARGET_BEST_MATCHING;
+        return BestMatching;
     } else if (strcmp(arg, "ALL") == 0) {
-        return Z_QUERY_TARGET_ALL;
+        return All;
     } else if (strcmp(arg, "ALL_COMPLETE") == 0) {
-        return Z_QUERY_TARGET_ALL_COMPLETE;
+        return AllComplete;
     } else {
         printf("Unsupported query target value [%s]\n", arg);
         exit(-1);
@@ -296,7 +275,7 @@ z_query_target_t parse_query_target(const char* arg) {
 
 z_priority_t parse_priority(const char* arg) {
     int p = atoi(arg);
-    if (p < Z_PRIORITY_REAL_TIME || p > Z_PRIORITY_BACKGROUND) {
+    if (p < RealTime || p > Background) {
         printf("Unsupported priority value [%s]\n", arg);
         exit(-1);
     }

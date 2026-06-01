@@ -10,234 +10,58 @@
 //
 // Contributors:
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
-
-#include <signal.h>
+//
 #include <stdio.h>
 
 #include "parse_args.h"
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
-#if defined(Z_FEATURE_UNSTABLE_API)
-static volatile bool running = true;
-
-void handle_signal(int sig) {
-    (void)sig;
-    running = false;
-}
-#endif
-
-void print_zid(const z_id_t* id, void* ctx) {
-    z_owned_string_t str;
-    z_id_to_string(id, &str);
-    printf("%.*s\n", (int)z_string_len(z_loan(str)), z_string_data(z_loan(str)));
-    z_drop(z_move(str));
+void print_zid(z_zenoh_id_t* zid) {
+    char* s = z_zenoh_id_to_string(zid);
+    printf("%s\n", s);
+    z_free(s);
 }
 
-#if defined(Z_FEATURE_UNSTABLE_API)
-void print_transport(z_loaned_transport_t* transport, void* ctx) {
-    z_id_t zid = z_transport_zid(transport);
-    z_whatami_t whatami = z_transport_whatami(transport);
-    bool is_qos = z_transport_is_qos(transport);
-    bool is_multicast = z_transport_is_multicast(transport);
-
-    printf("  Transport\n");
-
-    z_owned_string_t zid_str;
-    z_id_to_string(&zid, &zid_str);
-    printf("    zid: %.*s\n", (int)z_string_len(z_loan(zid_str)), z_string_data(z_loan(zid_str)));
-    z_drop(z_move(zid_str));
-
-    z_view_string_t whatami_str;
-    z_whatami_to_view_string(whatami, &whatami_str);
-    printf("    whatami: %.*s\n", (int)z_string_len(z_loan(whatami_str)), z_string_data(z_loan(whatami_str)));
-
-    printf("    is_qos: %s\n", is_qos ? "true" : "false");
-    printf("    is_multicast: %s\n", is_multicast ? "true" : "false");
-
-#if defined(Z_FEATURE_SHARED_MEMORY)
-    bool is_shm = z_transport_is_shm(transport);
-    printf("    is_shm: %s\n", is_shm ? "true" : "false");
-#endif
+// Print + free an array of owned zenoh-id handles.
+void print_zid_array(const char* label, z_zenoh_id_t** ids, uintptr_t len) {
+    printf("%s:\n", label);
+    for (uintptr_t i = 0; i < len; i++) {
+        printf("  ");
+        print_zid(ids[i]);
+    }
+    z_free_array(ids, len, z_zenoh_id_drop);
 }
 
-void print_link(z_loaned_link_t* link, void* ctx) {
-    z_id_t zid = z_link_zid(link);
-    z_owned_string_t src, dst, group, auth_id;
-    z_link_src(link, &src);
-    z_link_dst(link, &dst);
-    z_link_group(link, &group);
-    z_link_auth_identifier(link, &auth_id);
-
-    uint16_t mtu = z_link_mtu(link);
-    bool is_streamed = z_link_is_streamed(link);
-
-    uint8_t min_prio = 0, max_prio = 0;
-    bool has_priorities = z_link_priorities(link, &min_prio, &max_prio);
-    z_reliability_t reliability;
-    bool has_reliability = z_link_reliability(link, &reliability);
-
-    printf("  Link\n");
-
-    z_owned_string_t zid_str;
-    z_id_to_string(&zid, &zid_str);
-    printf("    zid: %.*s\n", (int)z_string_len(z_loan(zid_str)), z_string_data(z_loan(zid_str)));
-    z_drop(z_move(zid_str));
-
-    printf("    src: %.*s\n", (int)z_string_len(z_loan(src)), z_string_data(z_loan(src)));
-    printf("    dst: %.*s\n", (int)z_string_len(z_loan(dst)), z_string_data(z_loan(dst)));
-
-    if (z_string_len(z_loan(group)) > 0) {
-        printf("    group: %.*s\n", (int)z_string_len(z_loan(group)), z_string_data(z_loan(group)));
-    }
-
-    printf("    mtu: %u\n", mtu);
-    printf("    is_streamed: %s\n", is_streamed ? "true" : "false");
-
-    z_owned_string_array_t interfaces;
-    z_link_interfaces(link, &interfaces);
-    size_t interfaces_len = z_string_array_len(z_loan(interfaces));
-    if (interfaces_len > 0) {
-        printf("    interfaces: [");
-        for (size_t i = 0; i < interfaces_len; i++) {
-            const z_loaned_string_t* iface = z_string_array_get(z_loan(interfaces), i);
-            if (i > 0) printf(", ");
-            printf("%.*s", (int)z_string_len(iface), z_string_data(iface));
-        }
-        printf("]\n");
-    }
-    z_drop(z_move(interfaces));
-
-    if (z_string_len(z_loan(auth_id)) > 0) {
-        printf("    auth_id: %.*s\n", (int)z_string_len(z_loan(auth_id)), z_string_data(z_loan(auth_id)));
-    }
-
-    if (has_priorities) {
-        printf("    priorities: (%u, %u)\n", min_prio, max_prio);
-    }
-
-    if (has_reliability) {
-        printf("    reliability: %s\n", reliability == Z_RELIABILITY_RELIABLE ? "Reliable" : "BestEffort");
-    }
-
-    z_drop(z_move(src));
-    z_drop(z_move(dst));
-    z_drop(z_move(group));
-    z_drop(z_move(auth_id));
-}
-
-void transport_event_handler(z_loaned_transport_event_t* event, void* ctx) {
-    (void)ctx;
-    z_sample_kind_t kind = z_transport_event_kind(event);
-    const z_loaned_transport_t* transport = z_transport_event_transport(event);
-
-    if (kind == Z_SAMPLE_KIND_PUT) {
-        printf("[Transport Event] Opened:\n");
-    } else {
-        printf("[Transport Event] Closed:\n");
-    }
-
-    print_transport((z_loaned_transport_t*)transport, NULL);
-}
-
-void link_event_handler(z_loaned_link_event_t* event, void* ctx) {
-    (void)ctx;
-    z_sample_kind_t kind = z_link_event_kind(event);
-    const z_loaned_link_t* link = z_link_event_link(event);
-
-    if (kind == Z_SAMPLE_KIND_PUT) {
-        printf("[Link Event] Added:\n");
-    } else {
-        printf("[Link Event] Removed:\n");
-    }
-
-    print_link((z_loaned_link_t*)link, NULL);
-}
-#endif
-
-void parse_args(int argc, char** argv, z_owned_config_t* config);
+void parse_args(int argc, char** argv, z_config_t** config);
 
 int main(int argc, char** argv) {
-    zc_init_log_from_env_or("error");
+    z_init_zenoh_logs_from_env_or("error");
 
-    z_owned_config_t config;
+    z_config_t* config = NULL;
     parse_args(argc, argv, &config);
 
     printf("Opening session...\n");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
+    z_session_t* s = z_open(config, NULL);
+    if (!s) {
         printf("Unable to open session!\n");
-        exit(-1);
+        return -1;
     }
 
-    z_id_t self_id = z_info_zid(z_loan(s));
+    z_zenoh_id_t* self_id = z_session_zid(s);  // owned
     printf("own id: ");
-    print_zid(&self_id, NULL);
+    print_zid(self_id);
+    z_zenoh_id_drop(self_id);
 
-    printf("routers ids:\n");
-    z_owned_closure_zid_t callback;
-    z_closure(&callback, print_zid, NULL, NULL);
-    z_info_routers_zid(z_loan(s), z_move(callback));
+    uintptr_t n = 0;
+    z_zenoh_id_t** routers = z_session_routers_zid(s, &n);
+    print_zid_array("routers ids", routers, n);
 
-    // `callback` has been `z_move`d just above, so it's safe to reuse the variable,
-    // we'll just have to make sure we `z_move` it again to avoid mem-leaks.
-    printf("peers ids:\n");
-    z_owned_closure_zid_t callback2;
-    z_closure(&callback2, print_zid, NULL, NULL);
-    z_info_peers_zid(z_loan(s), z_move(callback2));
+    n = 0;
+    z_zenoh_id_t** peers = z_session_peers_zid(s, &n);
+    print_zid_array("peers ids", peers, n);
 
-#if defined(Z_FEATURE_UNSTABLE_API)
-    // Get transports
-    printf("transports:\n");
-    z_owned_closure_transport_t callback3;
-    z_closure(&callback3, print_transport, NULL, NULL);
-    z_info_transports(z_loan(s), z_move(callback3));
-
-    // Get all links
-    printf("\nlinks:\n");
-    z_owned_closure_link_t callback4;
-    z_closure(&callback4, print_link, NULL, NULL);
-    z_info_links(z_loan(s), z_move(callback4), NULL);
-
-    // Set up transport and link events listeners
-    printf("\nConnectivity events (Press CTRL-C to quit):\n");
-
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
-
-    z_owned_closure_transport_event_t transport_event_callback;
-    z_closure(&transport_event_callback, transport_event_handler, NULL, NULL);
-    z_transport_events_listener_options_t transport_opts;
-    z_transport_events_listener_options_default(&transport_opts);
-    transport_opts.history = false;  // Don't repeat transports we already printed
-
-    if (z_declare_background_transport_events_listener(z_loan(s), z_move(transport_event_callback), &transport_opts) !=
-        Z_OK) {
-        printf("Unable to declare transport events listener!\n");
-        z_drop(z_move(s));
-        exit(-1);
-    }
-
-    z_owned_link_events_listener_t link_listener;
-    z_owned_closure_link_event_t link_event_callback;
-    z_closure(&link_event_callback, link_event_handler, NULL, NULL);
-    z_link_events_listener_options_t link_opts;
-    z_link_events_listener_options_default(&link_opts);
-    link_opts.history = false;  // Don't repeat links we already printed
-
-    if (z_declare_link_events_listener(z_loan(s), &link_listener, z_move(link_event_callback), &link_opts) != Z_OK) {
-        printf("Unable to declare link events listener!\n");
-        z_drop(z_move(s));
-        exit(-1);
-    }
-
-    while (running) {
-        z_sleep_s(1);
-    }
-
-    printf("\nExiting...\n");
-#endif
-
-    z_drop(z_move(s));
+    z_session_drop(s);
+    return 0;
 }
 
 void print_help() {
@@ -248,7 +72,7 @@ void print_help() {
     printf(COMMON_HELP);
 }
 
-void parse_args(int argc, char** argv, z_owned_config_t* config) {
+void parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     parse_zenoh_common_args(argc, argv, config);
     const char* arg = check_unknown_opts(argc, argv);

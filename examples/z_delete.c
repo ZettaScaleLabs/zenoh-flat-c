@@ -15,37 +15,48 @@
 #include <string.h>
 
 #include "parse_args.h"
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-c-put"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-put"
 
 struct args_t {
     char* keyexpr;  // -k, --key
 };
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config);
+struct args_t parse_args(int argc, char** argv, z_config_t** config);
 
 int main(int argc, char** argv) {
-    zc_init_log_from_env_or("error");
+    z_init_zenoh_logs_from_env_or("error");
 
-    z_owned_config_t config;
+    z_config_t* config = NULL;
     struct args_t args = parse_args(argc, argv, &config);
 
     printf("Opening session...\n");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
+    z_session_t* s = z_open(config, NULL);  // consumes the config
+    if (!s) {
         printf("Unable to open session!\n");
-        exit(-1);
+        return -1;
     }
 
     printf("Deleting resources matching '%s'...\n", args.keyexpr);
-    z_view_keyexpr_t ke;
-    z_view_keyexpr_from_str(&ke, args.keyexpr);
-    int res = z_delete(z_loan(s), z_loan(ke), NULL);
-    if (res < 0) {
+    z_keyexpr_t* ke = z_keyexpr_try_from(args.keyexpr, NULL);
+    if (!ke) {
+        printf("%s is not a valid key expression\n", args.keyexpr);
+        z_session_drop(s);
+        return -1;
+    }
+
+    // `z_session_delete` borrows the key expression.
+#if defined(ZENOH_FLAT_UNSTABLE_API)
+    bool ok = z_session_delete(s, ke, Block, Data, false, NULL, Reliable, NULL);
+#else
+    bool ok = z_session_delete(s, ke, Block, Data, false, NULL, NULL);
+#endif
+    if (!ok) {
         printf("Delete failed...\n");
     }
 
-    z_drop(z_move(s));
+    z_keyexpr_drop(ke);
+    z_session_drop(s);
     return 0;
 }
 
@@ -54,12 +65,12 @@ void print_help() {
         "\
     Usage: z_delete [OPTIONS]\n\n\
     Options:\n\
-        -k, --key <KEYEXPR> (optional, string, default='%s'): The key expression to write to\n",
+        -k, --key <KEYEXPR> (optional, string, default='%s'): The key expression to delete\n",
         DEFAULT_KEYEXPR);
     printf(COMMON_HELP);
 }
 
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config) {
+struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     struct args_t args;
     _Z_PARSE_ARG(args.keyexpr, "k", "key", (char*), (char*)DEFAULT_KEYEXPR);

@@ -10,79 +10,74 @@
 //
 // Contributors:
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
-
+//
 #include <stdio.h>
+#include <unistd.h>
 
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
-void fprintpid(FILE *stream, z_id_t pid) {
-    z_owned_string_t str;
-    z_id_to_string(&pid, &str);
-    fprintf(stream, "%.*s", (int)z_string_len(z_loan(str)), z_string_data(z_loan(str)));
-    z_drop(z_move(str));
-}
-
-void fprintwhatami(FILE *stream, z_whatami_t whatami) {
-    z_view_string_t whatami_str;
-    z_whatami_to_view_string(whatami, &whatami_str);
-    fprintf(stream, "%.*s", (int)z_string_len(z_loan(whatami_str)), z_string_data(z_loan(whatami_str)));
-}
-
-void fprintlocators(FILE *stream, const z_loaned_string_array_t *locs) {
-    fprintf(stream, "[");
-    for (unsigned int i = 0; i < z_string_array_len(locs); i++) {
-        const z_loaned_string_t *loc = z_string_array_get(locs, i);
-        fprintf(stream, "%.*s", (int)z_string_len(loc), z_string_data(loc));
-        if (i < z_string_array_len(locs) - 1) {
-            fprintf(stream, ", ");
-        }
+const char* whatami_to_str(z_whatami_t w) {
+    switch (w) {
+        case Router:
+            return "Router";
+        case Peer:
+            return "Peer";
+        case Client:
+            return "Client";
+        default:
+            return "Other";
     }
-    fprintf(stream, "]");
 }
 
-void fprinthello(FILE *stream, const z_loaned_hello_t *hello) {
-    fprintf(stream, "Hello { pid: ");
+// The hello handler receives an OWNED `z_hello_t*` and must drop it.
+void hello_handler(z_hello_t* hello, void* context) {
+    (*(int*)context)++;
 
-    fprintpid(stream, z_hello_zid(hello));
-    fprintf(stream, ", whatami: ");
-    fprintwhatami(stream, z_hello_whatami(hello));
+    z_zenoh_id_t* zid = z_hello_zid(hello);  // owned id
+    char* zid_str = z_zenoh_id_to_string(zid);
 
-    fprintf(stream, ", locators: ");
-    z_owned_string_array_t locators;
-    z_hello_locators(hello, &locators);
-    fprintlocators(stream, z_loan(locators));
-    z_string_array_drop(z_move(locators));
+    printf("Hello { zid: %s, whatami: %s, locators: [", zid_str, whatami_to_str(z_hello_whatami(hello)));
 
-    fprintf(stream, " }");
+    uintptr_t n = 0;
+    char** locators = z_hello_locators(hello, &n);  // array of owned strings
+    for (uintptr_t i = 0; i < n; i++) {
+        printf("%s%s", i ? ", " : "", locators[i]);
+    }
+    printf("] }\n");
+
+    z_free_array(locators, n, z_free);  // free each locator string + the block
+    z_free(zid_str);
+    z_zenoh_id_drop(zid);
+    z_hello_drop(hello);  // OWNED — release it
 }
 
-void callback(z_loaned_hello_t *hello, void *context) {
-    fprinthello(stdout, hello);
-    fprintf(stdout, "\n");
-    (*(int *)context)++;
-}
-
-void drop(void *context) {
-    printf("Dropping scout\n");
-    int count = *(int *)context;
-    z_free(context);
+void on_close(void* context) {
+    int count = *(int*)context;
     if (!count) {
         printf("Did not find any zenoh process.\n");
     }
 }
 
-int main(int argc, char **argv) {
-    zc_init_log_from_env_or("error");
+int main(void) {
+    z_init_zenoh_logs_from_env_or("error");
 
-    int *context = z_malloc(sizeof(int));
-    *context = 0;
-    z_owned_config_t config;
-    z_config_default(&config);
+    int count = 0;
+    z_config_t* config = z_config_default();
 
-    z_owned_closure_hello_t closure;
-    z_closure(&closure, callback, drop, context);
+    z_closure_hello_t callback = {&count, hello_handler, NULL};
+    z_closure_drop_t closer = {&count, on_close, NULL};
+
     printf("Scouting...\n");
-    z_scout(z_move(config), z_move(closure), NULL);
-    z_sleep_s(1);
+    // whatami bitfield 7 = Router | Peer | Client. The config is BORROWED (scout
+    // clones it internally), so it can be dropped right after.
+    z_scout_t* scout = z_scout(Router | Peer | Client, config, callback, closer, NULL);
+    z_config_drop(config);
+    if (!scout) {
+        printf("Unable to start scouting.\n");
+        return -1;
+    }
+
+    sleep(1);
+    z_scout_drop(scout);  // stops scouting and fires `on_close`
     return 0;
 }

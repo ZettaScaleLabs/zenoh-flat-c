@@ -13,80 +13,95 @@
 //
 #include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "parse_args.h"
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
 #define DEFAULT_KEYEXPR "demo/example/**"
 
 struct args_t {
     char* keyexpr;  // -k, --key
 };
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config);
+struct args_t parse_args(int argc, char** argv, z_config_t** config);
 const char* kind_to_str(z_sample_kind_t kind);
 
-void data_handler(z_loaned_sample_t* sample, void* arg) {
-    z_view_string_t key_string;
-    z_keyexpr_as_view_string(z_sample_keyexpr(sample), &key_string);
+// The sample handler receives an OWNED `z_sample_t*` and must drop it. The
+// accessors (`z_sample_key_expr`, `z_sample_payload`, ...) return BORROWS valid
+// only while the sample is alive; the strings they materialize are owned and
+// must be `z_free`d.
+void data_handler(z_sample_t* sample, void* arg) {
+    (void)arg;
+    char* keyexpr = z_keyexpr_to_string(z_sample_key_expr(sample));
 
-    z_owned_string_t payload_string;
-    z_bytes_to_string(z_sample_payload(sample), &payload_string);
+    uintptr_t payload_len = 0;
+    uint8_t* payload = z_zbytes_to_bytes(z_sample_payload(sample), &payload_len);
 
-    printf(">> [Subscriber] Received %s ('%.*s': '%.*s')", kind_to_str(z_sample_kind(sample)),
-           (int)z_string_len(z_loan(key_string)), z_string_data(z_loan(key_string)),
-           (int)z_string_len(z_loan(payload_string)), z_string_data(z_loan(payload_string)));
+    printf(">> [Subscriber] Received %s ('%s': '%.*s')", kind_to_str(z_sample_kind(sample)), keyexpr,
+           (int)payload_len, payload);
 
-    const z_loaned_bytes_t* attachment = z_sample_attachment(sample);
-    // checks if attachment exists
+    const z_zbytes_t* attachment = z_sample_attachment(sample);  // borrowed, NULL if none
     if (attachment != NULL) {
-        z_owned_string_t attachment_string;
-        z_bytes_to_string(attachment, &attachment_string);
-        printf(" (%.*s)", (int)z_string_len(z_loan(attachment_string)), z_string_data(z_loan(attachment_string)));
-        z_drop(z_move(attachment_string));
+        uintptr_t att_len = 0;
+        uint8_t* att = z_zbytes_to_bytes(attachment, &att_len);
+        printf(" (%.*s)", (int)att_len, att);
+        z_free(att);
     }
     printf("\n");
-    z_drop(z_move(payload_string));
+
+    z_free(keyexpr);
+    z_free(payload);
+    z_sample_drop(sample);  // OWNED — release it
 }
 
-int main(int argc, char** argv) {
-    zc_init_log_from_env_or("error");
+void on_close(void* arg) { (void)arg; }
 
-    z_owned_config_t config;
+int main(int argc, char** argv) {
+    z_init_zenoh_logs_from_env_or("error");
+
+    z_config_t* config = NULL;
     struct args_t args = parse_args(argc, argv, &config);
-    z_view_keyexpr_t ke;
-    z_view_keyexpr_from_str(&ke, args.keyexpr);
 
     printf("Opening session...\n");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
+    z_session_t* s = z_open(config, NULL);
+    if (!s) {
         printf("Unable to open session!\n");
-        exit(-1);
+        return -1;
     }
 
-    z_owned_closure_sample_t callback;
-    z_closure(&callback, data_handler, NULL, NULL);
+    z_keyexpr_t* ke = z_keyexpr_try_from(args.keyexpr, NULL);
+    if (!ke) {
+        printf("%s is not a valid key expression\n", args.keyexpr);
+        z_session_drop(s);
+        return -1;
+    }
+
     printf("Declaring Subscriber on '%s'...\n", args.keyexpr);
-    z_owned_subscriber_t sub;
-    if (z_declare_subscriber(z_loan(s), &sub, z_loan(ke), z_move(callback), NULL) < 0) {
+    z_closure_sample_t callback = {NULL, data_handler, NULL};
+    z_closure_drop_t closer = {NULL, on_close, NULL};
+    // `declare_subscriber` CONSUMES the key expression.
+    z_subscriber_t* sub = z_session_declare_subscriber(s, ke, callback, closer, NULL);
+    if (!sub) {
         printf("Unable to declare subscriber.\n");
-        exit(-1);
+        z_session_drop(s);
+        return -1;
     }
 
     printf("Press CTRL-C to quit...\n");
     while (1) {
-        z_sleep_s(1);
+        sleep(1);
     }
 
-    z_drop(z_move(sub));
-    z_drop(z_move(s));
+    z_subscriber_drop(sub);
+    z_session_drop(s);
     return 0;
 }
 
 const char* kind_to_str(z_sample_kind_t kind) {
     switch (kind) {
-        case Z_SAMPLE_KIND_PUT:
+        case Put:
             return "PUT";
-        case Z_SAMPLE_KIND_DELETE:
+        case Delete:
             return "DELETE";
         default:
             return "UNKNOWN";
@@ -103,7 +118,7 @@ void print_help() {
     printf(COMMON_HELP);
 }
 
-struct args_t parse_args(int argc, char** argv, z_owned_config_t* config) {
+struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     struct args_t args;
     _Z_PARSE_ARG(args.keyexpr, "k", "key", (char*), (char*)DEFAULT_KEYEXPR);

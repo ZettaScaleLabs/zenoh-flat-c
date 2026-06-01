@@ -3,13 +3,11 @@
 #
 # Modeled on eclipse-zenoh/zenoh-c's CMakeLists.txt: a hand-rolled
 # `add_custom_command` invokes `cargo build` to produce the Rust library and the
-# generated flat C header, then IMPORTED targets expose it as `zenohflatc::lib`.
-# Trimmed — no SHM/unstable features, no Cargo.toml templating (build.rs already
-# runs cbindgen).
+# generated C header, then IMPORTED targets expose it as `zenohflatc::lib`.
 #
-# The library carries a DUAL API in `include/`:
-#   - `zenoh_flat.h`  : the generated flat `z_flat_*` ABI
-#   - `zenoh.h`       : the header-only zenoh-c-compatible layer over it
+# The crate's sole C API is the generated `include/zenoh_flat.h` (plain `z_*`
+# symbols) + `include/zenoh_flat_configure.h` (feature `#define`s, auto-included
+# by `zenoh_flat.h`).
 #
 cmake_minimum_required(VERSION 3.16)
 project(zenoh_flat_c LANGUAGES C)

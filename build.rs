@@ -15,15 +15,11 @@ fn main() {
 }
 
 /// Emit `include/zenoh_flat_configure.h` mirroring the enabled Cargo features as
-/// C `#define`s, so the zenoh-c-compatible layer can `#if defined(...)` on the
-/// same feature gates the generated ABI was built with.
-///
-/// We deliberately use our own `ZENOH_FLAT_*` macros, NOT zenoh-c's
-/// `Z_FEATURE_UNSTABLE_API`: the compat layer only implements the `reliability`
-/// slice of zenoh-c's "unstable" surface, so defining `Z_FEATURE_UNSTABLE_API`
-/// would (incorrectly) make zenoh-c programs activate unstable branches that
-/// need APIs we don't provide. `ZENOH_FLAT_UNSTABLE_API` purely matches the flat
-/// ABI's reliability arity; zenoh-c example/unstable branches stay compiled out.
+/// C `#define`s, so consumers (examples/tests) can `#if defined(...)` on the same
+/// feature gates the generated ABI was built with. `ZENOH_FLAT_UNSTABLE_API`
+/// guards the `unstable`-only API arity (e.g. the trailing `reliability` arg of
+/// `z_session_put`/`z_session_delete`/`z_session_declare_publisher`).
+/// `zenoh_flat.h` auto-includes this header (via cbindgen.toml `after_includes`).
 fn generate_configure_header() {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let path = PathBuf::from(&crate_dir).join("include").join("zenoh_flat_configure.h");
@@ -75,7 +71,7 @@ fn generate_flat_bindings() -> PathBuf {
         // Single universal raw-memory freer for the `char*` data the layer hands
         // out (string returns + data-struct `String` fields). Opaque handles keep
         // their own typed `*_drop`.
-        .free_memory_function("z_flat_free")
+        .free_memory_function("z_free")
         // Base: strip the `Z` opaque-handle prefix, then `snake_case`, with the
         // few irregulars fixed in this one place (`KeyExpr`→`keyexpr` etc.).
         .mangle_rust_type(|short| {
@@ -87,22 +83,25 @@ fn generate_flat_bindings() -> PathBuf {
                 other => snake_case(other),
             }
         })
-        // All C-facing names carry the `z_flat_` prefix so the plain `z_` namespace
-        // is free for a separate zenoh-c-compatible wrapper layered on top.
-        .mangle_type_name(|base| format!("z_flat_{base}_t"))
-        .mangle_destructor(|base| format!("z_flat_{base}_drop"))
+        // The flat API is the sole C API of this crate, so its names carry the
+        // plain `z_` prefix (the zenoh convention).
+        .mangle_type_name(|base| format!("z_{base}_t"))
+        .mangle_destructor(|base| format!("z_{base}_drop"))
         .mangle_callback(|bases| {
             if bases.is_empty() {
-                "z_flat_closure_drop_t".to_string()
+                "z_closure_drop_t".to_string()
             } else {
-                format!("z_flat_closure_{}_t", bases.join("_"))
+                format!("z_closure_{}_t", bases.join("_"))
             }
         })
-        // Strip any leading `z_` then prefix `z_flat_` (`z_open`→`z_flat_open`,
-        // `init_android_logs`→`z_flat_init_android_logs`).
+        // Functions are already `z_*` except the loggers — prefix those
+        // (`init_android_logs` → `z_init_android_logs`).
         .mangle_function(|n| {
-            let rest = n.strip_prefix("z_").unwrap_or(n);
-            format!("z_flat_{rest}")
+            if n.starts_with("z_") {
+                n.to_string()
+            } else {
+                format!("z_{n}")
+            }
         });
 
     for ty in [
@@ -495,11 +494,9 @@ fn generate_c_headers(bindings_file: &PathBuf) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            // Also publish the flat header to the in-tree, deterministic
-            // `include/` dir so C consumers (and the CMake build) have a stable
-            // path. `include/` is the single dual-API directory: this generated
-            // `zenoh_flat.h` is the flat API; the committed `zenoh.h` family is
-            // the zenoh-c-compatible API layered on top.
+            // Also publish the header to the in-tree, deterministic `include/`
+            // dir so C consumers (and the CMake build) have a stable path.
+            // `zenoh_flat.h` is the crate's sole C API (plain `z_*` symbols).
             let stable = PathBuf::from(&crate_dir).join("include").join("zenoh_flat.h");
             if let Some(parent) = stable.parent() {
                 let _ = std::fs::create_dir_all(parent);

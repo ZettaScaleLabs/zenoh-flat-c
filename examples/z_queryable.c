@@ -10,100 +10,93 @@
 //
 // Contributors:
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
-
+//
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "parse_args.h"
-#include "zenoh.h"
+#include "zenoh_flat.h"
 
-#define DEFAULT_KEYEXPR "demo/example/zenoh-c-queryable"
+#define DEFAULT_KEYEXPR "demo/example/zenoh-flat-c-queryable"
 #define DEFAULT_VALUE "Queryable from C!"
-z_view_keyexpr_t ke;
 
 struct args_t {
-    char *keyexpr;  // -k, --key
-    char *value;    // -p, --payload
+    char* keyexpr;  // -k, --key
+    char* value;    // -p, --payload
     bool complete;  // --complete
 };
+struct args_t parse_args(int argc, char** argv, z_config_t** config);
 
-char *value;
+// The query handler receives an OWNED `z_query_t*` and must drop it. The
+// `context` carries the reply value string.
+void query_handler(z_query_t* query, void* context) {
+    const char* value = (const char*)context;
 
-struct args_t parse_args(int argc, char **argv, z_owned_config_t *config);
+    char* keyexpr = z_keyexpr_to_string(z_query_keyexpr(query));
+    char* params = z_query_parameters(query);  // owned string
 
-void query_handler(z_loaned_query_t *query, void *context) {
-    z_view_string_t key_string;
-    z_keyexpr_as_view_string(z_query_keyexpr(query), &key_string);
-
-    z_view_string_t params;
-    z_query_parameters(query, &params);
-
-    const z_loaned_bytes_t *payload = z_query_payload(query);
-    if (payload != NULL && z_bytes_len(payload) > 0) {
-        z_owned_string_t payload_string;
-        z_bytes_to_string(payload, &payload_string);
-
-        printf(">> [Queryable ] Received Query '%.*s?%.*s' with value '%.*s'\n", (int)z_string_len(z_loan(key_string)),
-               z_string_data(z_loan(key_string)), (int)z_string_len(z_loan(params)), z_string_data(z_loan(params)),
-               (int)z_string_len(z_loan(payload_string)), z_string_data(z_loan(payload_string)));
-        z_drop(z_move(payload_string));
+    const z_zbytes_t* payload = z_query_payload(query);  // borrowed, NULL if none
+    if (payload != NULL) {
+        uintptr_t plen = 0;
+        uint8_t* pbuf = z_zbytes_to_bytes(payload, &plen);
+        printf(">> [Queryable] Received Query '%s?%s' with value '%.*s'\n", keyexpr, params, (int)plen, pbuf);
+        z_free(pbuf);
     } else {
-        printf(">> [Queryable ] Received Query '%.*s?%.*s'\n", (int)z_string_len(z_loan(key_string)),
-               z_string_data(z_loan(key_string)), (int)z_string_len(z_loan(params)), z_string_data(z_loan(params)));
+        printf(">> [Queryable] Received Query '%s?%s'\n", keyexpr, params);
     }
-    z_query_reply_options_t options;
-    z_query_reply_options_default(&options);
 
-    z_owned_bytes_t reply_payload;
-    z_bytes_from_static_str(&reply_payload, (char *)value);
+    printf(">> [Queryable] Responding ('%s': '%s')\n", keyexpr, value);
+    const z_keyexpr_t* reply_ke = z_query_keyexpr(query);  // borrowed; reply borrows it too
+    z_zbytes_t* reply_payload = z_zbytes_from_slice((const uint8_t*)value, strlen(value));
+    // `z_query_reply_success` borrows the query + keyexpr and consumes the payload.
+    z_query_reply_success(query, reply_ke, reply_payload, z_encoding_zenoh_bytes(), NULL, NULL, false, NULL);
 
-    z_view_keyexpr_t reply_keyexpr;
-    z_view_keyexpr_from_str(&reply_keyexpr, (const char *)context);
-    printf(">> [Queryable ] Responding ('%s': '%s')\n", (const char *)context, value);
-
-    z_query_reply(query, z_loan(reply_keyexpr), z_move(reply_payload), &options);
+    z_free(keyexpr);
+    z_free(params);
+    z_query_drop(query);  // OWNED — release it
 }
 
-int main(int argc, char **argv) {
-    zc_init_log_from_env_or("error");
+void on_close(void* arg) { (void)arg; }
 
-    z_owned_config_t config;
+int main(int argc, char** argv) {
+    z_init_zenoh_logs_from_env_or("error");
+
+    z_config_t* config = NULL;
     struct args_t args = parse_args(argc, argv, &config);
-    value = args.value;
 
     printf("Opening session...\n");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
+    z_session_t* s = z_open(config, NULL);
+    if (!s) {
         printf("Unable to open session!\n");
-        exit(-1);
+        return -1;
     }
 
-    if (z_view_keyexpr_from_str(&ke, args.keyexpr) < 0) {
-        printf("%s is not a valid key expression", args.keyexpr);
-        exit(-1);
+    z_keyexpr_t* ke = z_keyexpr_try_from(args.keyexpr, NULL);
+    if (!ke) {
+        printf("%s is not a valid key expression\n", args.keyexpr);
+        z_session_drop(s);
+        return -1;
     }
 
     printf("Declaring Queryable on '%s'...\n", args.keyexpr);
-    z_owned_closure_query_t callback;
-    z_closure(&callback, query_handler, NULL, (void *)args.keyexpr);
-    z_owned_queryable_t qable;
-
-    z_queryable_options_t opts;
-    z_queryable_options_default(&opts);
-    opts.complete = args.complete;
-
-    if (z_declare_queryable(z_loan(s), &qable, z_loan(ke), z_move(callback), &opts) < 0) {
+    z_closure_query_t callback = {(void*)args.value, query_handler, NULL};
+    z_closure_drop_t closer = {NULL, on_close, NULL};
+    // `declare_queryable` CONSUMES the key expression.
+    z_queryable_t* qable = z_session_declare_queryable(s, ke, args.complete, callback, closer, NULL);
+    if (!qable) {
         printf("Unable to create queryable.\n");
-        exit(-1);
+        z_session_drop(s);
+        return -1;
     }
 
     printf("Press CTRL-C to quit...\n");
     while (1) {
-        z_sleep_s(1);
+        sleep(1);
     }
 
-    z_drop(z_move(qable));
-    z_drop(z_move(s));
+    z_queryable_drop(qable);
+    z_session_drop(s);
     return 0;
 }
 
@@ -113,26 +106,26 @@ void print_help() {
     Usage: z_queryable [OPTIONS]\n\n\
     Options:\n\
         -k, --key <KEYEXPR> (optional, string, default='%s'): The key expression matching queries to reply to\n\
-        -p, --payload <PAYLOAD> (optional, string, default='%s'): The value to reply to queries with\n\
-        --complete (optional): Indicates whether queryable is complete or not",
+        -p, --payload <PAYLOAD> (optional, string, default='%s'): The value to reply with\n\
+        --complete (optional): Whether the queryable is complete\n",
         DEFAULT_KEYEXPR, DEFAULT_VALUE);
     printf(COMMON_HELP);
 }
 
-struct args_t parse_args(int argc, char **argv, z_owned_config_t *config) {
+struct args_t parse_args(int argc, char** argv, z_config_t** config) {
     _Z_CHECK_HELP;
     struct args_t args;
-    _Z_PARSE_ARG(args.keyexpr, "k", "key", (char *), (char *)DEFAULT_KEYEXPR);
-    _Z_PARSE_ARG(args.value, "p", "payload", (char *), (char *)DEFAULT_VALUE);
+    _Z_PARSE_ARG(args.keyexpr, "k", "key", (char*), (char*)DEFAULT_KEYEXPR);
+    _Z_PARSE_ARG(args.value, "p", "payload", (char*), (char*)DEFAULT_VALUE);
     args.complete = _Z_CHECK_FLAG("complete");
 
     parse_zenoh_common_args(argc, argv, config);
-    const char *arg = check_unknown_opts(argc, argv);
+    const char* arg = check_unknown_opts(argc, argv);
     if (arg) {
         printf("Unknown option %s\n", arg);
         exit(-1);
     }
-    char **pos_args = parse_pos_args(argc, argv, 1);
+    char** pos_args = parse_pos_args(argc, argv, 1);
     if (!pos_args || pos_args[0]) {
         printf("Unexpected positional arguments\n");
         free(pos_args);
