@@ -53,3 +53,13 @@ default = [
     "transport_ws",
     "transport_quic_datagram",
 ]
+
+[workspace]
+members = [".", "prebindgen-project-root"]
+
+[patch]
+
+[patch.crates-io]
+
+[patch.crates-io.prebindgen-project-root]
+path = "prebindgen-project-root"

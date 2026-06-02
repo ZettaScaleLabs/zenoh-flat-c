@@ -5,3 +5,7 @@
 //! `extern "C"` wrappers into a C header.
 
 include!(concat!(env!("OUT_DIR"), "/zenoh_flat.rs"));
+
+// Hand-written `Gravestone` impls for the inline-by-value opaque types defined
+// (probe-sized) in the generated file above.
+mod gravestone;

@@ -489,31 +489,26 @@ fn generate_flat_bindings() -> PathBuf {
         .write_rust(&cbindgen, "zenoh_flat.rs")
         .expect("write generated bindings");
 
-    // Inject the inline-by-value opaque counterpart `z_zbytes_t` (size/align of
-    // `ZZBytes`) + its `Gravestone` impl at the top of the generated file, so it
-    // is compiled into the cdylib AND seen by cbindgen (which parses this file).
-    // The opaque struct is rendered by `prebindgen-opaque-types`; size/align are
-    // pinned here and guarded fail-closed by the size/align asserts cbindgen
-    // emits (a wrong value breaks this build rather than corrupting memory). A
-    // live cross-target probe (`prebindgen_opaque_types::generate`) can replace
-    // the literals; for the default feature set `ZBytes` is 32 bytes / align 8.
-    let opaque = prebindgen_opaque_types::render_opaque("z_zbytes_t", 32, 8);
-    let gravestone = "\
-impl ::prebindgen::Gravestone for z_zbytes_t {
-    fn gravestone() -> Self {
-        unsafe {
-            ::core::mem::transmute_copy(&::core::mem::ManuallyDrop::new(
-                <zenoh_flat::ZZBytes as ::core::default::Default>::default(),
-            ))
-        }
-    }
-    fn is_gravestone(&self) -> bool {
-        unsafe { (*(self as *const Self as *const zenoh_flat::ZZBytes)).is_empty() }
-    }
-}
-";
+    // Inject the inline-by-value opaque counterpart `z_zbytes_t` (same size/align
+    // as `ZZBytes`) at the top of the generated file, so it is compiled into the
+    // cdylib AND seen by cbindgen (which parses this file). Its `Gravestone` impl
+    // is hand-written in `src/gravestone.rs` (type-specific empty-state knowledge).
+    //
+    // The size/alignment are always obtained from a `prebindgen-opaque-types`
+    // probe crate built for `$TARGET` (never from `size_of` in this build script).
+    // The probe compiles a *normal* dependency on `zenoh-flat` with the cdylib's
+    // exact `FEATURES`, so its layout matches the cdylib's regardless of (a)
+    // cross-compilation and (b) Cargo feature unification differing between normal
+    // deps and build-deps. The source crate locates itself via its
+    // prebindgen-exported `MANIFEST_DIR`; the size/align asserts cbindgen emits
+    // guard it fail-closed regardless.
+    let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
+        .features(zenoh_flat::FEATURES)
+        .add("zenoh_flat::ZZBytes", "z_zbytes_t")
+        .generate()
+        .expect("probe ZBytes size/alignment for z_zbytes_t");
     let body = std::fs::read_to_string(&bindings_file).expect("read generated bindings");
-    std::fs::write(&bindings_file, format!("{opaque}{gravestone}\n{body}"))
+    std::fs::write(&bindings_file, format!("{opaque}\n{body}"))
         .expect("inject opaque type");
 
     println!(
