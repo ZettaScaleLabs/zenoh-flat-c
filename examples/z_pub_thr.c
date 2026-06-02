@@ -68,17 +68,19 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Master payload, built once. Each `z_publisher_put` consumes its payload,
-    // so we hand it a cheap clone every iteration.
-    z_zbytes_t* payload = z_zbytes_from_slice(value, args.size);
+    // Master payload, built once (held by value, inline — no heap handle). Each
+    // `z_publisher_put` consumes its payload, so we hand it a cheap clone every
+    // iteration: `z_zbytes_clone` bumps a refcount (no per-message copy) and the
+    // value lives on the stack (no per-message malloc/free).
+    z_zbytes_t payload = z_zbytes_from_slice(value, args.size);
 
     printf("Press CTRL-C to quit...\n");
     while (1) {
-        z_zbytes_t* to_send = z_zbytes_clone(payload);
-        z_publisher_put(pub, to_send, NULL, NULL, NULL);
+        z_zbytes_t to_send = z_zbytes_clone(&payload);
+        z_publisher_put(pub, &to_send, NULL, NULL, NULL);
     }
 
-    z_zbytes_drop(payload);
+    z_zbytes_drop(&payload);
     z_publisher_drop(pub);
     z_session_drop(s);
     free(value);

@@ -14,6 +14,7 @@ konst = "0.3.0"
 
 [build-dependencies]
 prebindgen = { path = "../prebindgen/prebindgen" }
+prebindgen-opaque-types = { path = "../prebindgen/prebindgen-opaque-types" }
 zenoh-flat = { path = "../zenoh-flat" }
 cbindgen = "0.29.0"
 syn = { version = "2.0", features = ["full"] }

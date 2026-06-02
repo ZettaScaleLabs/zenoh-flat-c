@@ -111,7 +111,6 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(ZConfig),
         pq!(ZZenohId),
         pq!(ZHello),
-        pq!(ZZBytes),
         pq!(ZEncoding),
         pq!(ZSession),
         pq!(ZReply),
@@ -130,6 +129,14 @@ fn generate_flat_bindings() -> PathBuf {
     }
 
     cbindgen = cbindgen.data_struct(pq!(Error)).error();
+
+    // `ZZBytes` (the refcounted `zenoh::bytes::ZBytes`) is passed **inline by
+    // value** (no `Box`) via an opaque `#[repr(C, align(8))] z_zbytes_t` of
+    // identical size/align — eliminating the per-`z_publisher_put` malloc/free on
+    // the throughput hot path while preserving zero-copy refcount sharing. The
+    // opaque struct + its `Gravestone` impl are injected into the generated file
+    // below; cbindgen emits transmute converters + fail-closed size/align asserts.
+    cbindgen = cbindgen.value_opaque(pq!(ZZBytes), pq!(z_zbytes_t));
 
     // Whether the `unstable` feature is enabled for this build. Items gated by
     // `#[prebindgen(cfg = "feature = \"unstable\"")]` in zenoh-flat are only
@@ -482,6 +489,33 @@ fn generate_flat_bindings() -> PathBuf {
         .write_rust(&cbindgen, "zenoh_flat.rs")
         .expect("write generated bindings");
 
+    // Inject the inline-by-value opaque counterpart `z_zbytes_t` (size/align of
+    // `ZZBytes`) + its `Gravestone` impl at the top of the generated file, so it
+    // is compiled into the cdylib AND seen by cbindgen (which parses this file).
+    // The opaque struct is rendered by `prebindgen-opaque-types`; size/align are
+    // pinned here and guarded fail-closed by the size/align asserts cbindgen
+    // emits (a wrong value breaks this build rather than corrupting memory). A
+    // live cross-target probe (`prebindgen_opaque_types::generate`) can replace
+    // the literals; for the default feature set `ZBytes` is 32 bytes / align 8.
+    let opaque = prebindgen_opaque_types::render_opaque("z_zbytes_t", 32, 8);
+    let gravestone = "\
+impl ::prebindgen::Gravestone for z_zbytes_t {
+    fn gravestone() -> Self {
+        unsafe {
+            ::core::mem::transmute_copy(&::core::mem::ManuallyDrop::new(
+                <zenoh_flat::ZZBytes as ::core::default::Default>::default(),
+            ))
+        }
+    }
+    fn is_gravestone(&self) -> bool {
+        unsafe { (*(self as *const Self as *const zenoh_flat::ZZBytes)).is_empty() }
+    }
+}
+";
+    let body = std::fs::read_to_string(&bindings_file).expect("read generated bindings");
+    std::fs::write(&bindings_file, format!("{opaque}{gravestone}\n{body}"))
+        .expect("inject opaque type");
+
     println!(
         "cargo:warning=Generated bindings at: {}",
         bindings_file.display()
@@ -500,12 +534,23 @@ fn generate_c_headers(bindings_file: &PathBuf) {
 
     match cbindgen::Builder::new()
         .with_config(config)
-        .with_crate(&crate_dir)
         .with_src(bindings_file)
         .generate()
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
+            // cbindgen emits a single-`[u8;N]`-field opaque struct as an
+            // *incomplete* forward declaration (`typedef struct X X;`), which C
+            // cannot pass/return by value or stack-allocate. Rewrite it to the
+            // complete, aligned definition so the inline-by-value `z_zbytes_t`
+            // works. (Size/align are the same the Rust side asserts fail-closed.)
+            let mut header =
+                std::fs::read_to_string(&header_path).expect("read generated header");
+            header = header.replace(
+                "typedef struct z_zbytes_t z_zbytes_t;",
+                "typedef struct z_zbytes_t { _Alignas(8) uint8_t _0[32]; } z_zbytes_t;",
+            );
+            std::fs::write(&header_path, &header).expect("rewrite opaque header type");
             // Also publish the header to the in-tree, deterministic `include/`
             // dir so C consumers (and the CMake build) have a stable path.
             // `zenoh_flat.h` is the crate's sole C API (plain `z_*` symbols).

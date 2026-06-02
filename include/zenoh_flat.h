@@ -68,6 +68,8 @@ typedef enum {
   MatchingQuery = 1,
 } z_reply_key_expr_t;
 
+typedef struct z_zbytes_t { _Alignas(8) uint8_t _0[32]; } z_zbytes_t;
+
 typedef struct {
   uint8_t _private[0];
 } z_config_t;
@@ -133,10 +135,6 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } z_publisher_t;
-
-typedef struct {
-  uint8_t _private[0];
-} z_zbytes_t;
 
 typedef struct {
   uint8_t _private[0];
@@ -542,11 +540,11 @@ int64_t z_timestamp_ntp64(const z_timestamp_t *t);
 
 void z_try_init_zenoh_logs_from_env(void);
 
-z_zbytes_t *z_zbytes_clone(const z_zbytes_t *z);
+z_zbytes_t z_zbytes_clone(const z_zbytes_t *z);
 
 void z_zbytes_drop(z_zbytes_t *this_);
 
-z_zbytes_t *z_zbytes_from_slice(const uint8_t *bytes, uintptr_t bytes_len);
+z_zbytes_t z_zbytes_from_slice(const uint8_t *bytes, uintptr_t bytes_len);
 
 uint8_t *z_zbytes_to_bytes(const z_zbytes_t *z, uintptr_t *len);
 
