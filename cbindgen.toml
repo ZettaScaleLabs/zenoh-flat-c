@@ -19,6 +19,12 @@ after_includes = '''
 
 #include "zenoh_flat_configure.h"
 
+#if defined(_MSC_VER)
+#define ALIGN(n) __declspec(align(n))
+#else
+#define ALIGN(n) __attribute__((aligned(n)))
+#endif
+
 #define z_free_array(array, len, elem_drop) \
     do { \
         if (array) { \
@@ -46,3 +52,10 @@ args = "auto"
 [struct]
 derive_eq = false
 derive_neq = false
+
+# Express `#[repr(C, align(N))]` as the `ALIGN(N)` macro (defined per-platform in
+# `after_includes`). Without this, cbindgen cannot represent a struct's explicit
+# alignment in C and falls back to an *opaque* forward declaration — which can't
+# be stack-allocated or passed by value, breaking the inline-by-value `z_zbytes_t`.
+[layout]
+aligned_n = "ALIGN"

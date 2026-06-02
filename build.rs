@@ -534,18 +534,11 @@ fn generate_c_headers(bindings_file: &PathBuf) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            // cbindgen emits a single-`[u8;N]`-field opaque struct as an
-            // *incomplete* forward declaration (`typedef struct X X;`), which C
-            // cannot pass/return by value or stack-allocate. Rewrite it to the
-            // complete, aligned definition so the inline-by-value `z_zbytes_t`
-            // works. (Size/align are the same the Rust side asserts fail-closed.)
-            let mut header =
-                std::fs::read_to_string(&header_path).expect("read generated header");
-            header = header.replace(
-                "typedef struct z_zbytes_t z_zbytes_t;",
-                "typedef struct z_zbytes_t { _Alignas(8) uint8_t _0[32]; } z_zbytes_t;",
-            );
-            std::fs::write(&header_path, &header).expect("rewrite opaque header type");
+            // The inline-by-value `z_zbytes_t` is emitted complete and aligned by
+            // cbindgen directly, via `[layout] aligned_n = "ALIGN"` + the
+            // per-platform `ALIGN(n)` macro in `cbindgen.toml`'s `after_includes`
+            // (no header post-processing, and portable to MSVC).
+            //
             // Also publish the header to the in-tree, deterministic `include/`
             // dir so C consumers (and the CMake build) have a stable path.
             // `zenoh_flat.h` is the crate's sole C API (plain `z_*` symbols).

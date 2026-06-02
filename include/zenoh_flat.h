@@ -14,6 +14,12 @@
 
 #include "zenoh_flat_configure.h"
 
+#if defined(_MSC_VER)
+#define ALIGN(n) __declspec(align(n))
+#else
+#define ALIGN(n) __attribute__((aligned(n)))
+#endif
+
 #define z_free_array(array, len, elem_drop) \
     do { \
         if (array) { \
@@ -67,8 +73,6 @@ typedef enum {
   Any = 0,
   MatchingQuery = 1,
 } z_reply_key_expr_t;
-
-typedef struct z_zbytes_t { _Alignas(8) uint8_t _0[32]; } z_zbytes_t;
 
 typedef struct {
   uint8_t _private[0];
@@ -135,6 +139,10 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } z_publisher_t;
+
+typedef struct ALIGN(8) {
+  uint8_t _0[32];
+} z_zbytes_t;
 
 typedef struct {
   uint8_t _private[0];
