@@ -54,6 +54,18 @@ default = [
     "transport_quic_datagram",
 ]
 
+# Match eclipse-zenoh/zenoh-c's release profile (fat LTO, single codegen unit,
+# panic=abort) so the throughput examples are optimized identically to zenoh-c —
+# otherwise the generated per-message converters are not inlined into the
+# `extern "C"` wrappers / sub closure and the comparison is unfair. Set
+# `RUSTFLAGS=-g` for a profiling build with debug symbols.
+[profile.release]
+debug = false
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+
 [workspace]
 members = [".", "prebindgen-project-root"]
 
