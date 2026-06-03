@@ -172,31 +172,21 @@ fn generate_flat_bindings() -> PathBuf {
         cbindgen = cbindgen.enum_type(pq!(Reliability));
     }
 
-    // Callback signatures of the `z_*` opaque-handle tier. Keep canonical
-    // `z_closure_*_t` names on the currently exported owned callbacks.
+    // Callback signatures of the `z_*` opaque-handle tier
     cbindgen = cbindgen
         .callback(pq!(impl Fn(ZSample) + Send + Sync + 'static))
-        .name("z_closure_sample_t")
         .takeable_param(0)
         .callback(pq!(impl Fn(&ZSample) + Send + Sync + 'static))
-        .name("z_closure_sample_ref_t")
         .callback(pq!(impl Fn(ZReply) + Send + Sync + 'static))
-        .name("z_closure_reply_t")
         .takeable_param(0)
         .callback(pq!(impl Fn(&ZReply) + Send + Sync + 'static))
-        .name("z_closure_reply_ref_t")
         .callback(pq!(impl Fn(ZQuery) + Send + Sync + 'static))
-        .name("z_closure_query_t")
         .takeable_param(0)
         .callback(pq!(impl Fn(&ZQuery) + Send + Sync + 'static))
-        .name("z_closure_query_ref_t")
         .callback(pq!(impl Fn(ZHello) + Send + Sync + 'static))
-        .name("z_closure_hello_t")
         .takeable_param(0)
         .callback(pq!(impl Fn(&ZHello) + Send + Sync + 'static))
-        .name("z_closure_hello_ref_t")
-        .callback(pq!(impl Fn() + Send + Sync + 'static))
-        .name("z_closure_drop_t");
+        .callback(pq!(impl Fn() + Send + Sync + 'static));
 
     for ty in [
         pq!(Encoding),
