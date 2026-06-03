@@ -16,20 +16,22 @@
 #include "parse_args.h"
 #include "zenoh_flat.h"
 
-void print_zid(z_zenoh_id_t* zid) {
+void print_zid(const z_zenoh_id_t* zid) {
     char* s = z_zenoh_id_to_string(zid);
     printf("%s\n", s);
     z_free(s);
 }
 
-// Print + free an array of owned zenoh-id handles.
-void print_zid_array(const char* label, z_zenoh_id_t** ids, uintptr_t len) {
+// Print + free an array of zenoh ids. `z_zenoh_id_t` is now an inline by-value
+// plain-data struct, so the result is a single contiguous block of ids (not an
+// array of owned handles): print each by reference, then free the one block.
+void print_zid_array(const char* label, const z_zenoh_id_t* ids, uintptr_t len) {
     printf("%s:\n", label);
     for (uintptr_t i = 0; i < len; i++) {
         printf("  ");
-        print_zid(ids[i]);
+        print_zid(&ids[i]);
     }
-    z_free_array(ids, len, z_zenoh_id_drop);
+    z_free((void*)ids);
 }
 
 void parse_args(int argc, char** argv, z_config_t** config);
@@ -47,17 +49,16 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    z_zenoh_id_t* self_id = z_session_zid(s);  // owned
+    z_zenoh_id_t self_id = z_session_zid(s);  // by value (plain data)
     printf("own id: ");
-    print_zid(self_id);
-    z_zenoh_id_drop(self_id);
+    print_zid(&self_id);
 
     uintptr_t n = 0;
-    z_zenoh_id_t** routers = z_session_routers_zid(s, &n);
+    z_zenoh_id_t* routers = z_session_routers_zid(s, &n);
     print_zid_array("routers ids", routers, n);
 
     n = 0;
-    z_zenoh_id_t** peers = z_session_peers_zid(s, &n);
+    z_zenoh_id_t* peers = z_session_peers_zid(s, &n);
     print_zid_array("peers ids", peers, n);
 
     z_session_drop(s);

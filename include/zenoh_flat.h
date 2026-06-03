@@ -82,16 +82,16 @@ typedef struct {
   char *message;
 } z_error_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[40];
 } z_encoding_t;
 
 typedef struct ALIGN(8) {
   uint8_t _0[48];
 } z_hello_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(1) {
+  uint8_t _0[16];
 } z_zenoh_id_t;
 
 typedef struct {
@@ -244,11 +244,11 @@ const z_encoding_t *z_encoding_audio_ogg(void);
 
 const z_encoding_t *z_encoding_audio_vorbis(void);
 
-z_encoding_t *z_encoding_clone(const z_encoding_t *e);
+z_encoding_t z_encoding_clone(const z_encoding_t *e);
 
 void z_encoding_drop(z_encoding_t *this_);
 
-z_encoding_t *z_encoding_from_string(const char *s);
+z_encoding_t z_encoding_from_string(const char *s);
 
 int32_t z_encoding_id(const z_encoding_t *e);
 
@@ -322,7 +322,7 @@ void z_hello_take(z_hello_t *dst, z_hello_t *src);
 
 z_whatami_t z_hello_whatami(const z_hello_t *h);
 
-z_zenoh_id_t *z_hello_zid(const z_hello_t *h);
+z_zenoh_id_t z_hello_zid(const z_hello_t *h);
 
 void z_init_android_logs(const char *filter);
 
@@ -528,7 +528,7 @@ bool z_session_get(const z_session_t *session,
                    z_closure_drop_t on_close,
                    z_error_t *e);
 
-z_zenoh_id_t **z_session_peers_zid(const z_session_t *session, uintptr_t *len);
+z_zenoh_id_t *z_session_peers_zid(const z_session_t *session, uintptr_t *len);
 
 bool z_session_put(const z_session_t *session,
                    const z_keyexpr_t *key_expr,
@@ -540,11 +540,11 @@ bool z_session_put(const z_session_t *session,
                    z_zbytes_t *attachment,
                    z_error_t *e);
 
-z_zenoh_id_t **z_session_routers_zid(const z_session_t *session, uintptr_t *len);
+z_zenoh_id_t *z_session_routers_zid(const z_session_t *session, uintptr_t *len);
 
 bool z_session_undeclare_keyexpr(const z_session_t *session, z_keyexpr_t *key_expr, z_error_t *e);
 
-z_zenoh_id_t *z_session_zid(const z_session_t *session);
+z_zenoh_id_t z_session_zid(const z_session_t *session);
 
 void z_subscriber_drop(z_subscriber_t *this_);
 

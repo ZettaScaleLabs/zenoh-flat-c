@@ -33,8 +33,8 @@ const char* whatami_to_str(z_whatami_t w) {
 void hello_handler(z_hello_t* hello, void* context) {
     (*(int*)context)++;
 
-    z_zenoh_id_t* zid = z_hello_zid(hello);  // owned id
-    char* zid_str = z_zenoh_id_to_string(zid);
+    z_zenoh_id_t zid = z_hello_zid(hello);  // by value (plain data)
+    char* zid_str = z_zenoh_id_to_string(&zid);
 
     printf("Hello { zid: %s, whatami: %s, locators: [", zid_str, whatami_to_str(z_hello_whatami(hello)));
 
@@ -47,7 +47,6 @@ void hello_handler(z_hello_t* hello, void* context) {
 
     z_free_array(locators, n, z_free);  // free each locator string + the block
     z_free(zid_str);
-    z_zenoh_id_drop(zid);
     z_hello_drop(hello);
 }
 
