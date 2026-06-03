@@ -156,8 +156,8 @@ typedef struct {
   uint8_t _private[0];
 } z_queryable_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[24];
 } z_timestamp_t;
 
 typedef struct {
