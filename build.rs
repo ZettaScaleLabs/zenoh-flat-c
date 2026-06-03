@@ -504,7 +504,7 @@ fn generate_flat_bindings() -> PathBuf {
     // guard it fail-closed regardless.
     let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
         .features(zenoh_flat::FEATURES)
-        .add("zenoh_flat::ZZBytes", "z_zbytes_t")
+        .add(pq!(zenoh_flat::ZZBytes), pq!(z_zbytes_t))
         .generate()
         .expect("probe ZBytes size/alignment for z_zbytes_t");
     let body = std::fs::read_to_string(&bindings_file).expect("read generated bindings");
