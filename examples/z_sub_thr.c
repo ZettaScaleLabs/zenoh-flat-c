@@ -66,8 +66,10 @@ z_stats_t* z_stats_make(unsigned long max_rounds, unsigned long messages_per_rou
     return stats;
 }
 
-// The sample handler receives an owned `z_sample_t*`.
+// The sample handler receives an owned `z_sample_t*`; the caller drops it after
+// this returns (no `z_sample_drop` needed here).
 void on_sample(z_sample_t* sample, void* context) {
+    (void)sample;
     z_stats_t* stats = (z_stats_t*)context;
     if (stats->count == 0) {
         clock_gettime(CLOCK_MONOTONIC, &stats->start);
@@ -86,7 +88,7 @@ void on_sample(z_sample_t* sample, void* context) {
             exit(0);
         }
     }
-    z_sample_drop(sample);
+    // No z_sample_drop: the caller drops the sample after this returns.
 }
 
 // Fired when the subscriber is dropped (clean shutdown).

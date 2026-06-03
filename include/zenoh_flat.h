@@ -86,8 +86,8 @@ typedef struct {
   uint8_t _private[0];
 } z_encoding_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[48];
 } z_hello_t;
 
 typedef struct {
@@ -106,8 +106,8 @@ typedef struct {
   uint8_t _private[0];
 } z_session_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[184];
 } z_sample_t;
 
 typedef struct {
@@ -126,8 +126,8 @@ typedef struct {
   uint8_t _private[0];
 } z_liveliness_token_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[184];
 } z_reply_t;
 
 typedef struct {
@@ -148,8 +148,8 @@ typedef struct {
   uint8_t _private[0];
 } z_querier_t;
 
-typedef struct {
-  uint8_t _private[0];
+typedef struct ALIGN(8) {
+  uint8_t _0[136];
 } z_query_t;
 
 typedef struct {
@@ -318,6 +318,8 @@ void z_hello_drop(z_hello_t *this_);
 
 char **z_hello_locators(const z_hello_t *h, uintptr_t *len);
 
+void z_hello_take(z_hello_t *dst, z_hello_t *src);
+
 z_whatami_t z_hello_whatami(const z_hello_t *h);
 
 z_zenoh_id_t *z_hello_zid(const z_hello_t *h);
@@ -418,6 +420,8 @@ bool z_query_reply_success(const z_query_t *query,
                            const bool *express,
                            z_error_t *e);
 
+void z_query_take(z_query_t *dst, z_query_t *src);
+
 void z_queryable_drop(z_queryable_t *this_);
 
 void z_reply_drop(z_reply_t *this_);
@@ -429,6 +433,8 @@ const z_zbytes_t *z_reply_error_payload(const z_reply_t *r);
 bool z_reply_is_ok(const z_reply_t *r);
 
 const z_sample_t *z_reply_sample(const z_reply_t *r);
+
+void z_reply_take(z_reply_t *dst, z_reply_t *src);
 
 const z_zbytes_t *z_sample_attachment(const z_sample_t *s);
 
@@ -447,6 +453,8 @@ z_sample_kind_t z_sample_kind(const z_sample_t *s);
 const z_zbytes_t *z_sample_payload(const z_sample_t *s);
 
 z_priority_t z_sample_priority(const z_sample_t *s);
+
+void z_sample_take(z_sample_t *dst, z_sample_t *src);
 
 const z_timestamp_t *z_sample_timestamp(const z_sample_t *s);
 

@@ -26,10 +26,13 @@ struct args_t {
 struct args_t parse_args(int argc, char** argv, z_config_t** config);
 const char* kind_to_str(z_sample_kind_t kind);
 
-// The sample handler receives a LOANED `z_sample_t*` valid only for the call. The
-// accessors (`z_sample_key_expr`, `z_sample_payload`, ...) return BORROWS valid
-// only while the sample is alive; the strings they materialize are owned and
-// must be `z_free`d.
+// The sample handler receives an OWNED `z_sample_t*` (inline, on the caller's
+// stack). The accessors (`z_sample_key_expr`, `z_sample_payload`, ...) return
+// BORROWS valid only while the sample is alive; the strings they materialize are
+// owned and must be `z_free`d. The caller DROPS the sample after this returns, so
+// do not `z_sample_drop` it here when just reading. To keep it (e.g. collect all
+// samples), move it out with `z_sample_take(&mine, sample)` and drop `mine` later;
+// `sample` is then left a gravestone and the caller's post-call drop is a no-op.
 void data_handler(z_sample_t* sample, void* arg) {
     (void)arg;
     char* keyexpr = z_keyexpr_to_string(z_sample_key_expr(sample));
@@ -51,7 +54,7 @@ void data_handler(z_sample_t* sample, void* arg) {
 
     z_free(keyexpr);
     z_free(payload);
-    z_sample_drop(sample);
+    // No z_sample_drop here: the caller drops the sample after this returns.
 }
 
 void on_close(void* arg) { (void)arg; }

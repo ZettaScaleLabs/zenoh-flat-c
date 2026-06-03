@@ -110,15 +110,11 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(ZKeyExpr),
         pq!(ZConfig),
         pq!(ZZenohId),
-        pq!(ZHello),
         pq!(ZEncoding),
         pq!(ZSession),
-        pq!(ZReply),
-        pq!(ZSample),
         pq!(ZTimestamp),
         pq!(ZPublisher),
         pq!(ZQuerier),
-        pq!(ZQuery),
         pq!(ZLivelinessToken),
         // Returned by the callback-declaring APIs (subscriber/queryable/scout).
         pq!(ZSubscriber),
@@ -137,6 +133,19 @@ fn generate_flat_bindings() -> PathBuf {
     // opaque struct + its `Gravestone` impl are injected into the generated file
     // below; cbindgen emits transmute converters + fail-closed size/align asserts.
     cbindgen = cbindgen.value_opaque(pq!(ZZBytes), pq!(z_zbytes_t));
+
+    // `ZSample` (delivered to subscriber callbacks) is inline by value too, with a
+    // `Sample::empty()` gravestone. Its owned callback param is marked
+    // `.takeable_param(0)` below: the C callback receives `z_sample_t*` and may
+    // take it (collect) via `z_sample_take` or just read it; the trampoline drops
+    // it after the call. Eliminates the per-message box/free on the sub path.
+    cbindgen = cbindgen.value_opaque(pq!(ZSample), pq!(z_sample_t));
+
+    // The remaining owned callback-argument types — same inline-by-value +
+    // `T::empty()` gravestone + takeable-callback treatment as `ZSample`.
+    cbindgen = cbindgen.value_opaque(pq!(ZReply), pq!(z_reply_t));
+    cbindgen = cbindgen.value_opaque(pq!(ZQuery), pq!(z_query_t));
+    cbindgen = cbindgen.value_opaque(pq!(ZHello), pq!(z_hello_t));
 
     // Whether the `unstable` feature is enabled for this build. Items gated by
     // `#[prebindgen(cfg = "feature = \"unstable\"")]` in zenoh-flat are only
@@ -167,18 +176,22 @@ fn generate_flat_bindings() -> PathBuf {
     cbindgen = cbindgen
         .callback(pq!(impl Fn(ZSample) + Send + Sync + 'static))
         .name("z_closure_sample_t")
+        .takeable_param(0)
         .callback(pq!(impl Fn(&ZSample) + Send + Sync + 'static))
         .name("z_closure_sample_ref_t")
         .callback(pq!(impl Fn(ZReply) + Send + Sync + 'static))
         .name("z_closure_reply_t")
+        .takeable_param(0)
         .callback(pq!(impl Fn(&ZReply) + Send + Sync + 'static))
         .name("z_closure_reply_ref_t")
         .callback(pq!(impl Fn(ZQuery) + Send + Sync + 'static))
         .name("z_closure_query_t")
+        .takeable_param(0)
         .callback(pq!(impl Fn(&ZQuery) + Send + Sync + 'static))
         .name("z_closure_query_ref_t")
         .callback(pq!(impl Fn(ZHello) + Send + Sync + 'static))
         .name("z_closure_hello_t")
+        .takeable_param(0)
         .callback(pq!(impl Fn(&ZHello) + Send + Sync + 'static))
         .name("z_closure_hello_ref_t")
         .callback(pq!(impl Fn() + Send + Sync + 'static))
@@ -505,6 +518,10 @@ fn generate_flat_bindings() -> PathBuf {
     let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
         .features(zenoh_flat::FEATURES)
         .add(pq!(zenoh_flat::ZZBytes), pq!(z_zbytes_t))
+        .add(pq!(zenoh_flat::ZSample), pq!(z_sample_t))
+        .add(pq!(zenoh_flat::ZReply), pq!(z_reply_t))
+        .add(pq!(zenoh_flat::ZQuery), pq!(z_query_t))
+        .add(pq!(zenoh_flat::ZHello), pq!(z_hello_t))
         .generate()
         .expect("probe ZBytes size/alignment for z_zbytes_t");
     let body = std::fs::read_to_string(&bindings_file).expect("read generated bindings");

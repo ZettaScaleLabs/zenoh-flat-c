@@ -14,8 +14,28 @@ impl ::prebindgen::Gravestone for crate::z_zbytes_t {
     fn rust_gravestone() -> zenoh_flat::ZZBytes {
         zenoh_flat::ZZBytes::default()
     }
+}
 
-    fn rust_is_gravestone(rust: &zenoh_flat::ZZBytes) -> bool {
-        rust.is_empty()
+impl ::prebindgen::Gravestone for crate::z_sample_t {
+    fn rust_gravestone() -> zenoh_flat::ZSample {
+        zenoh_flat::ZSample::empty()
+    }
+}
+
+impl ::prebindgen::Gravestone for crate::z_reply_t {
+    fn rust_gravestone() -> zenoh_flat::ZReply {
+        zenoh_flat::ZReply::empty()
+    }
+}
+
+impl ::prebindgen::Gravestone for crate::z_query_t {
+    fn rust_gravestone() -> zenoh_flat::ZQuery {
+        zenoh_flat::ZQuery::empty()
+    }
+}
+
+impl ::prebindgen::Gravestone for crate::z_hello_t {
+    fn rust_gravestone() -> zenoh_flat::ZHello {
+        zenoh_flat::ZHello::empty()
     }
 }
