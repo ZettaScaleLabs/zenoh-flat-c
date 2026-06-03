@@ -89,6 +89,7 @@ fn generate_flat_bindings() -> PathBuf {
         // plain `z_` prefix (the zenoh convention).
         .mangle_type_name(|base| format!("z_{base}_t"))
         .mangle_destructor(|base| format!("z_{base}_drop"))
+        .mangle_take(|base| format!("z_{base}_take"))
         .mangle_callback(|bases| {
             if bases.is_empty() {
                 "z_closure_drop_t".to_string()
