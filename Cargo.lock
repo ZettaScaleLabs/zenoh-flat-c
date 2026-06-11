@@ -2048,6 +2048,7 @@ version = "0.4.1"
 dependencies = [
  "if_rust_version",
  "itertools",
+ "jni",
  "konst 0.3.17",
  "prettyplease",
  "proc-macro2",

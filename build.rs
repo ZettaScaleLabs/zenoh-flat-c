@@ -145,6 +145,12 @@ fn generate_flat_bindings() -> PathBuf {
     cbindgen = cbindgen.opaque_owned_struct(pq!(ZQuery), pq!(z_query_t));
     cbindgen = cbindgen.opaque_owned_struct(pq!(ZHello), pq!(z_hello_t));
 
+    // `ZReplyError` (a failed reply's `{ payload: ZBytes, encoding: Encoding }`)
+    // owns external data — inline by value with a `ReplyError::default()`
+    // gravestone. Reached from a `ZReply` via the `Option` getter `z_reply_err`;
+    // its own accessors are plain borrows.
+    cbindgen = cbindgen.opaque_owned_struct(pq!(ZReplyError), pq!(z_reply_error_t));
+
     // `ZTimestamp` (`uhlc::Timestamp`) is a small `Copy` POD that owns no external
     // data — inline it by value as `opaque_data_struct`. There is no per-message box to
     // eliminate here (the change just drops the boxed-handle indirection for the
@@ -445,6 +451,8 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_encoding_from_string),
         pq!(z_timestamp_ntp64),
         pq!(z_reply_is_ok),
+        pq!(z_reply_error_payload),  // &ZReplyError → &ZZBytes borrow
+        pq!(z_reply_error_encoding), // &ZReplyError → &ZEncoding borrow
         pq!(z_sample_key_expr),
         pq!(z_sample_payload),
         pq!(z_sample_encoding),
@@ -470,8 +478,7 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_sample_timestamp),     // Option<ZTimestamp>
         pq!(z_sample_attachment),    // Option<ZZBytes>
         pq!(z_reply_sample),         // Option<ZSample>
-        pq!(z_reply_error_payload),  // Option<ZZBytes>
-        pq!(z_reply_error_encoding), // Option<ZEncoding>
+        pq!(z_reply_err),            // Option<ZReplyError>
         pq!(z_query_payload),        // Option<&ZZBytes> borrow
         pq!(z_query_encoding),       // Option<&ZEncoding> borrow
     ] {
@@ -531,6 +538,7 @@ fn generate_flat_bindings() -> PathBuf {
         .add(pq!(zenoh_flat::ZZBytes), pq!(z_zbytes_t))
         .add(pq!(zenoh_flat::ZSample), pq!(z_sample_t))
         .add(pq!(zenoh_flat::ZReply), pq!(z_reply_t))
+        .add(pq!(zenoh_flat::ZReplyError), pq!(z_reply_error_t))
         .add(pq!(zenoh_flat::ZQuery), pq!(z_query_t))
         .add(pq!(zenoh_flat::ZHello), pq!(z_hello_t))
         .add(pq!(zenoh_flat::ZTimestamp), pq!(z_timestamp_t))

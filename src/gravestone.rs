@@ -28,6 +28,14 @@ impl ::prebindgen::Gravestone for crate::z_reply_t {
     }
 }
 
+// A failed reply's error: empty payload + default encoding — cheaply
+// constructed and safely droppable.
+impl ::prebindgen::Gravestone for crate::z_reply_error_t {
+    fn rust_gravestone() -> zenoh_flat::ZReplyError {
+        zenoh_flat::ZReplyError::default()
+    }
+}
+
 impl ::prebindgen::Gravestone for crate::z_query_t {
     fn rust_gravestone() -> zenoh_flat::ZQuery {
         zenoh_flat::ZQuery::empty()
