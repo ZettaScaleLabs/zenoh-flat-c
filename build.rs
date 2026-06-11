@@ -368,6 +368,10 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_session_delete),
         pq!(z_query_reply_success),
         pq!(z_query_reply_delete),
+        // Reply with a fully-formed owned `ZSample` (preserves kind + metadata);
+        // returns `Result<(), Error>`, so its fallible inputs route through the
+        // error out-param — no `.panic()`.
+        pq!(z_query_reply_sample),
         pq!(z_liveliness_declare_token),
         pq!(z_encoding_zenoh_bytes),
         pq!(z_encoding_zenoh_string),
@@ -438,6 +442,11 @@ fn generate_flat_bindings() -> PathBuf {
         cbindgen = cbindgen.function(pq!(z_keyexpr_relation_to)).panic();
         cbindgen = cbindgen.function(pq!(z_reply_replier_zid)).panic(); // Option<ZZenohId>
         cbindgen = cbindgen.function(pq!(z_reply_replier_eid)).panic();
+        // Unstable sample metadata getters (`&ZSample` borrow, no `Result`).
+        cbindgen = cbindgen.function(pq!(z_sample_reliability)).panic(); // Reliability enum
+        cbindgen = cbindgen.function(pq!(z_sample_source_zid)).panic(); // Option<ZZenohId>
+        cbindgen = cbindgen.function(pq!(z_sample_source_eid)).panic(); // i32
+        cbindgen = cbindgen.function(pq!(z_sample_source_sn)).panic(); // i64
     }
 
     for function in [
@@ -465,6 +474,11 @@ fn generate_flat_bindings() -> PathBuf {
         pq!(z_keyexpr_to_string), // owned String → char*
         pq!(z_encoding_clone),    // owned ZEncoding handle
         pq!(z_zbytes_clone),      // owned ZZBytes handle (cheap refcount clone)
+        // Sample constructors: build an owned `ZSample` (Put / Delete) from a
+        // key-expr/payload + optional metadata. No `Result` channel, so their
+        // fallible (owned/borrow) inputs use `.panic()`, like z_encoding_clone.
+        pq!(z_sample_put),
+        pq!(z_sample_delete),
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
