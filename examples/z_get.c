@@ -100,11 +100,9 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    z_zbytes_t payload_val;
-    z_zbytes_t* payload = NULL;
+    z_zbytes_t payload;
     if (args.value != NULL) {
-        payload_val = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
-        payload = &payload_val;
+        payload = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
     }
 
     done_signal_t sig;
@@ -118,8 +116,8 @@ int main(int argc, char** argv) {
     z_query_target_t target = args.target;
     printf("Sending Query '%s'...\n", args.selector);
     // Borrows the key expression; consumes the payload; encoding is borrowed.
-    bool ok = z_session_get(s, ke, params, &timeout_ms, &target, NULL, NULL, NULL, NULL, NULL, payload, NULL, NULL,
-                            callback, closer, NULL);
+    bool ok = z_session_get(s, ke, params, &timeout_ms, &target, NULL, NULL, NULL, NULL, NULL,
+                            args.value != NULL ? &payload : NULL, NULL, NULL, callback, closer, NULL);
     z_keyexpr_drop(ke);  // get only borrowed it
 
     if (ok) {

@@ -69,14 +69,12 @@ int main(int argc, char** argv) {
         printf("Putting Data ('%s': '%s')...\n", args.keyexpr, buf);
 
         z_zbytes_t payload = z_zbytes_from_slice((const uint8_t*)buf, strlen(buf));
-        z_zbytes_t attachment_val;
-        z_zbytes_t* attachment = NULL;
+        z_zbytes_t attachment;
         if (args.attachment) {
-            attachment_val = z_zbytes_from_slice((const uint8_t*)args.attachment, strlen(args.attachment));
-            attachment = &attachment_val;
+            attachment = z_zbytes_from_slice((const uint8_t*)args.attachment, strlen(args.attachment));
         }
         // `publisher_put` consumes the payload + attachment.
-        z_publisher_put(pub, &payload, z_encoding_text_plain(), attachment, NULL);
+        z_publisher_put(pub, &payload, z_encoding_text_plain(), args.attachment ? &attachment : NULL, NULL);
     }
 
     z_publisher_drop(pub);
