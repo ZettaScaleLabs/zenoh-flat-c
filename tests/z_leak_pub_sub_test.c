@@ -14,15 +14,10 @@
 // In-process publisher + subscriber over the flat API. Verifies a sample is
 // delivered through the callback handler (run under valgrind for a leak check).
 //
-// KNOWN-FAILING — disabled in ctest (tests/CMakeLists.txt). This test aborts
-// inside zenoh itself, not zenoh-flat-c: an `rx` transport thread panics at
-// `zenoh-sync/object_pool.rs:106` (`RecyclingObject::deref` →
-// `self.object.as_ref().unwrap()` on an already-recycled rx buffer) while
-// decoding a frame (`universal::rx::handle_frame` → `FrameReader::next` →
-// `ZSlice::as_slice`). Root cause is a zenoh-internal use-after-recycle in the rx
-// `RecyclingObjectPool` that is shared (cloned) across the per-priority
-// `read_loop` tasks. Deterministic at low load on zenoh rev 6be4942. Re-enable
-// once fixed upstream.
+// NOTE: the subscriber callback receives the sample by TAKEABLE pointer — the
+// trampoline drops it after the callback returns. So the handler must only READ
+// it (as below); calling `z_sample_drop` here would double-free the sample's
+// payload buffer. To keep the sample, move it out with `z_sample_take` instead.
 //
 #include <stdio.h>
 #include <string.h>
@@ -49,7 +44,6 @@ void data_handler(z_sample_t* sample, void* arg) {
     g_received++;
     z_free(ke);
     z_free(payload);
-    z_sample_drop(sample);
 }
 
 void on_close(void* arg) { (void)arg; }

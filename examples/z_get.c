@@ -59,7 +59,7 @@ void reply_handler(z_reply_t* reply, void* ctx) {
     } else {
         printf(">> Received an error\n");
     }
-    z_reply_drop(reply);
+    // No z_reply_drop: the reply is takeable — the caller drops it after this returns.
 }
 
 // Fired once when the reply stream ends (completion or timeout).

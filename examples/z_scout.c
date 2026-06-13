@@ -47,7 +47,7 @@ void hello_handler(z_hello_t* hello, void* context) {
 
     z_free_array(locators, n, z_free);  // free each locator string + the block
     z_free(zid_str);
-    z_hello_drop(hello);
+    // No z_hello_drop: the hello is takeable — the caller drops it after this returns.
 }
 
 void on_close(void* context) {

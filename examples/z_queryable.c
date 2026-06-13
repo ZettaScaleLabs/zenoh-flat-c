@@ -54,7 +54,8 @@ void query_handler(z_query_t* query, void* context) {
 
     z_free(keyexpr);
     z_free(params);
-    z_query_drop(query);
+    // No z_query_drop: the query is takeable — the caller drops it (finalizing the
+    // reply) after this returns. To answer later, move it out with z_query_take.
 }
 
 void on_close(void* arg) { (void)arg; }
