@@ -68,13 +68,15 @@ int main(int argc, char** argv) {
         snprintf(buf, sizeof(buf), "[%4d] %s", idx, args.value);
         printf("Putting Data ('%s': '%s')...\n", args.keyexpr, buf);
 
-        z_zbytes_t* payload = z_zbytes_from_slice((const uint8_t*)buf, strlen(buf));
+        z_zbytes_t payload = z_zbytes_from_slice((const uint8_t*)buf, strlen(buf));
+        z_zbytes_t attachment_val;
         z_zbytes_t* attachment = NULL;
         if (args.attachment) {
-            attachment = z_zbytes_from_slice((const uint8_t*)args.attachment, strlen(args.attachment));
+            attachment_val = z_zbytes_from_slice((const uint8_t*)args.attachment, strlen(args.attachment));
+            attachment = &attachment_val;
         }
         // `publisher_put` consumes the payload + attachment.
-        z_publisher_put(pub, payload, z_encoding_text_plain(), attachment, NULL);
+        z_publisher_put(pub, &payload, z_encoding_text_plain(), attachment, NULL);
     }
 
     z_publisher_drop(pub);

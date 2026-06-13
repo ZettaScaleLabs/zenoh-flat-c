@@ -122,7 +122,11 @@ fn generate_flat_bindings() -> PathBuf {
         cbindgen = cbindgen.opaque_ptr(ty);
     }
 
-    cbindgen = cbindgen.data_struct(pq!(Error)).error();
+    // `ZError` (`zenoh::Error = Box<dyn Error + Send + Sync>`) is the `E` of every
+    // fallible `z_*` `Result`. It is opaque (not a by-value struct), so it is
+    // marshalled to C as a `char*` message via `z_error_message(&e)`; the error
+    // out-param of each wrapper becomes `char **e`.
+    cbindgen = cbindgen.opaque_error(pq!(ZError), pq!(z_error_message));
 
     // `ZZBytes` (the refcounted `zenoh::bytes::ZBytes`) is passed **inline by
     // value** (no `Box`) via an opaque `#[repr(C, align(8))] z_zbytes_t` of

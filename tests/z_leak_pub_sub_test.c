@@ -14,6 +14,16 @@
 // In-process publisher + subscriber over the flat API. Verifies a sample is
 // delivered through the callback handler (run under valgrind for a leak check).
 //
+// KNOWN-FAILING — disabled in ctest (tests/CMakeLists.txt). This test aborts
+// inside zenoh itself, not zenoh-flat-c: an `rx` transport thread panics at
+// `zenoh-sync/object_pool.rs:106` (`RecyclingObject::deref` →
+// `self.object.as_ref().unwrap()` on an already-recycled rx buffer) while
+// decoding a frame (`universal::rx::handle_frame` → `FrameReader::next` →
+// `ZSlice::as_slice`). Root cause is a zenoh-internal use-after-recycle in the rx
+// `RecyclingObjectPool` that is shared (cloned) across the per-priority
+// `read_loop` tasks. Deterministic at low load on zenoh rev 6be4942. Re-enable
+// once fixed upstream.
+//
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -73,8 +83,8 @@ int main(void) {
 
     sleep(1);  // let the subscriber connect
     for (int i = 0; i < N_MSGS; i++) {
-        z_zbytes_t* payload = z_zbytes_from_slice((const uint8_t*)VALUE, strlen(VALUE));
-        bool ok = z_publisher_put(pub, payload, z_encoding_zenoh_bytes(), NULL, NULL);
+        z_zbytes_t payload = z_zbytes_from_slice((const uint8_t*)VALUE, strlen(VALUE));
+        bool ok = z_publisher_put(pub, &payload, z_encoding_zenoh_bytes(), NULL, NULL);
         assert(ok);
     }
     sleep(1);  // let samples arrive

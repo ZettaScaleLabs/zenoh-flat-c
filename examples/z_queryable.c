@@ -48,9 +48,9 @@ void query_handler(z_query_t* query, void* context) {
 
     printf(">> [Queryable] Responding ('%s': '%s')\n", keyexpr, value);
     const z_keyexpr_t* reply_ke = z_query_keyexpr(query);  // borrowed; reply borrows it too
-    z_zbytes_t* reply_payload = z_zbytes_from_slice((const uint8_t*)value, strlen(value));
+    z_zbytes_t reply_payload = z_zbytes_from_slice((const uint8_t*)value, strlen(value));
     // `z_query_reply_success` borrows the query + keyexpr and consumes the payload.
-    z_query_reply_success(query, reply_ke, reply_payload, NULL, NULL, NULL, NULL, NULL);
+    z_query_reply_success(query, reply_ke, &reply_payload, NULL, NULL, NULL, NULL, NULL);
 
     z_free(keyexpr);
     z_free(params);

@@ -46,9 +46,9 @@ int main(int argc, char** argv) {
         z_session_drop(s);
         return -1;
     }
-    z_zbytes_t* payload = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
+    z_zbytes_t payload = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
     // `z_session_put` borrows the key expression and CONSUMES the payload.
-    bool ok = z_session_put(s, ke, payload, NULL, NULL, NULL, NULL, NULL, NULL);
+    bool ok = z_session_put(s, ke, &payload, NULL, NULL, NULL, NULL, NULL, NULL);
     if (!ok) {
         printf("Put failed...\n");
     }

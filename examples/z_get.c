@@ -100,9 +100,11 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    z_zbytes_t payload_val;
     z_zbytes_t* payload = NULL;
     if (args.value != NULL) {
-        payload = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
+        payload_val = z_zbytes_from_slice((const uint8_t*)args.value, strlen(args.value));
+        payload = &payload_val;
     }
 
     done_signal_t sig;
