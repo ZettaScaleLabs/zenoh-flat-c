@@ -492,13 +492,13 @@ fn generate_flat_bindings() -> PathBuf {
     // need `.panic()`. All inner `T` lower to a pointer wire (`String` →
     // `char*`, the rest to declared opaque handles).
     for function in [
-        pq!(z_encoding_schema),      // Option<String>
-        pq!(z_sample_timestamp),     // Option<ZTimestamp>
-        pq!(z_sample_attachment),    // Option<ZZBytes>
-        pq!(z_reply_sample),         // Option<ZSample>
-        pq!(z_reply_err),            // Option<ZReplyError>
-        pq!(z_query_payload),        // Option<&ZZBytes> borrow
-        pq!(z_query_encoding),       // Option<&ZEncoding> borrow
+        pq!(z_encoding_schema),   // Option<String>
+        pq!(z_sample_timestamp),  // Option<ZTimestamp>
+        pq!(z_sample_attachment), // Option<ZZBytes>
+        pq!(z_reply_sample),      // Option<ZSample>
+        pq!(z_reply_err),         // Option<ZReplyError>
+        pq!(z_query_payload),     // Option<&ZZBytes> borrow
+        pq!(z_query_encoding),    // Option<&ZEncoding> borrow
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
@@ -509,7 +509,6 @@ fn generate_flat_bindings() -> PathBuf {
     // slice input, is infallible and declared in the plain `.function` loop.)
     for function in [
         pq!(z_hello_locators),      // Vec<String>
-        pq!(z_zbytes_to_bytes),     // Vec<u8>
         pq!(z_zenoh_id_to_bytes),   // Vec<u8>
         pq!(z_timestamp_id),        // Vec<u8>
         pq!(z_session_peers_zid),   // Vec<ZZenohId>
@@ -517,6 +516,9 @@ fn generate_flat_bindings() -> PathBuf {
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
+    // C still receives an owned byte array, but the Rust source accessor can use
+    // `Cow<[u8]>` to avoid forcing an intermediate owned Vec for other adapters.
+    cbindgen = cbindgen.function(pq!(z_zbytes_as_bytes)).base_name("zbytes_to_bytes").panic();
 
     // Opaque-handle zid accessor: returns the `ZZenohId` handle (`&ZSession`
     // borrow is fallible, no `Result`, so `.panic()`).
@@ -565,8 +567,7 @@ fn generate_flat_bindings() -> PathBuf {
         .generate()
         .expect("probe ZBytes size/alignment for z_zbytes_t");
     let body = std::fs::read_to_string(&bindings_file).expect("read generated bindings");
-    std::fs::write(&bindings_file, format!("{opaque}\n{body}"))
-        .expect("inject opaque type");
+    std::fs::write(&bindings_file, format!("{opaque}\n{body}")).expect("inject opaque type");
 
     println!(
         "cargo:warning=Generated bindings at: {}",
