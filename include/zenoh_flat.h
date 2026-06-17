@@ -248,6 +248,8 @@ z_encoding_t z_encoding_clone(const z_encoding_t *e);
 
 void z_encoding_drop(z_encoding_t *this_);
 
+z_encoding_t z_encoding_from_id(int32_t id, const char *schema);
+
 z_encoding_t z_encoding_from_string(const char *s);
 
 int32_t z_encoding_id(const z_encoding_t *e);
@@ -305,6 +307,8 @@ const z_encoding_t *z_encoding_video_raw(void);
 const z_encoding_t *z_encoding_video_vp8(void);
 
 const z_encoding_t *z_encoding_video_vp9(void);
+
+z_encoding_t z_encoding_with_schema(const z_encoding_t *e, const char *schema);
 
 const z_encoding_t *z_encoding_zenoh_bytes(void);
 
@@ -366,17 +370,23 @@ bool z_liveliness_get(const z_session_t *session,
 
 void z_liveliness_token_drop(z_liveliness_token_t *this_);
 
+bool z_liveliness_undeclare_token(z_liveliness_token_t *token, char **e);
+
 z_session_t *z_open(z_config_t *config, char **e);
 
 bool z_publisher_delete(const z_publisher_t *publisher, z_zbytes_t *attachment, char **e);
 
 void z_publisher_drop(z_publisher_t *this_);
 
+const z_keyexpr_t *z_publisher_keyexpr(const z_publisher_t *publisher);
+
 bool z_publisher_put(const z_publisher_t *publisher,
                      z_zbytes_t *payload,
                      const z_encoding_t *encoding,
                      z_zbytes_t *attachment,
                      char **e);
+
+bool z_publisher_undeclare(z_publisher_t *publisher, char **e);
 
 void z_querier_drop(z_querier_t *this_);
 
@@ -388,6 +398,12 @@ bool z_querier_get(const z_querier_t *querier,
                    z_closure_reply_t callback,
                    z_closure_drop_t on_close,
                    char **e);
+
+const z_keyexpr_t *z_querier_keyexpr(const z_querier_t *querier);
+
+bool z_querier_undeclare(z_querier_t *querier, char **e);
+
+const z_zbytes_t *z_query_attachment(const z_query_t *q);
 
 void z_query_drop(z_query_t *this_);
 
@@ -425,6 +441,10 @@ bool z_query_reply_success(const z_query_t *query,
 void z_query_take(z_query_t *dst, z_query_t *src);
 
 void z_queryable_drop(z_queryable_t *this_);
+
+const z_keyexpr_t *z_queryable_keyexpr(const z_queryable_t *queryable);
+
+bool z_queryable_undeclare(z_queryable_t *queryable, char **e);
 
 void z_reply_drop(z_reply_t *this_);
 
@@ -488,6 +508,8 @@ z_scout_t *z_scout(int32_t whatami,
 
 void z_scout_drop(z_scout_t *this_);
 
+bool z_session_close(const z_session_t *session, char **e);
+
 z_keyexpr_t *z_session_declare_keyexpr(const z_session_t *session, const char *key_expr, char **e);
 
 z_publisher_t *z_session_declare_publisher(const z_session_t *session,
@@ -548,6 +570,10 @@ bool z_session_get(const z_session_t *session,
                    z_closure_drop_t on_close,
                    char **e);
 
+bool z_session_is_closed(const z_session_t *session);
+
+z_timestamp_t z_session_new_timestamp(const z_session_t *session);
+
 z_zenoh_id_t *z_session_peers_zid(const z_session_t *session, uintptr_t *len);
 
 bool z_session_put(const z_session_t *session,
@@ -567,6 +593,10 @@ bool z_session_undeclare_keyexpr(const z_session_t *session, z_keyexpr_t *key_ex
 z_zenoh_id_t z_session_zid(const z_session_t *session);
 
 void z_subscriber_drop(z_subscriber_t *this_);
+
+const z_keyexpr_t *z_subscriber_keyexpr(const z_subscriber_t *subscriber);
+
+bool z_subscriber_undeclare(z_subscriber_t *subscriber, char **e);
 
 void z_timestamp_drop(z_timestamp_t *this_);
 

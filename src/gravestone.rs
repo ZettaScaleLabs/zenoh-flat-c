@@ -11,48 +11,48 @@
 //! safe to drop — mirroring zenoh-c.
 
 impl ::prebindgen::Gravestone for crate::z_zbytes_t {
-    fn rust_gravestone() -> zenoh_flat::ZZBytes {
-        zenoh_flat::ZZBytes::default()
+    fn rust_gravestone() -> zenoh_flat::ZBytes {
+        zenoh_flat::ZBytes::default()
     }
 }
 
 impl ::prebindgen::Gravestone for crate::z_sample_t {
-    fn rust_gravestone() -> zenoh_flat::ZSample {
-        zenoh_flat::ZSample::empty()
+    fn rust_gravestone() -> zenoh_flat::Sample {
+        zenoh_flat::Sample::empty()
     }
 }
 
 impl ::prebindgen::Gravestone for crate::z_reply_t {
-    fn rust_gravestone() -> zenoh_flat::ZReply {
-        zenoh_flat::ZReply::empty()
+    fn rust_gravestone() -> zenoh_flat::Reply {
+        zenoh_flat::Reply::empty()
     }
 }
 
 // A failed reply's error: empty payload + default encoding — cheaply
 // constructed and safely droppable.
 impl ::prebindgen::Gravestone for crate::z_reply_error_t {
-    fn rust_gravestone() -> zenoh_flat::ZReplyError {
-        zenoh_flat::ZReplyError::default()
+    fn rust_gravestone() -> zenoh_flat::ReplyError {
+        zenoh_flat::ReplyError::default()
     }
 }
 
 impl ::prebindgen::Gravestone for crate::z_query_t {
-    fn rust_gravestone() -> zenoh_flat::ZQuery {
-        zenoh_flat::ZQuery::empty()
+    fn rust_gravestone() -> zenoh_flat::Query {
+        zenoh_flat::Query::empty()
     }
 }
 
 impl ::prebindgen::Gravestone for crate::z_hello_t {
-    fn rust_gravestone() -> zenoh_flat::ZHello {
-        zenoh_flat::ZHello::empty()
+    fn rust_gravestone() -> zenoh_flat::Hello {
+        zenoh_flat::Hello::empty()
     }
 }
 
 // `ZEncoding`'s gravestone is the default encoding (`Encoding::default()` =
 // `ZENOH_BYTES`, id 0 / no schema) — cheaply constructed and safely droppable.
 impl ::prebindgen::Gravestone for crate::z_encoding_t {
-    fn rust_gravestone() -> zenoh_flat::ZEncoding {
-        zenoh_flat::ZEncoding::default()
+    fn rust_gravestone() -> zenoh_flat::Encoding {
+        zenoh_flat::Encoding::default()
     }
 }
 
